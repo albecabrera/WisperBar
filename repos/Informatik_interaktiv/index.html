@@ -13,7 +13,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/xml/xml.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/sql/sql.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/lua/lua.min.js"></script>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.min.js"></script>
+    <script src="https://unpkg.com/fengari-web@0.1.4/dist/fengari-web.js"></script>
     <style>
         * {
             margin: 0;
@@ -22,42 +26,43 @@
         }
 
         :root {
-            /* JetBrains PyCharm Light Theme */
-            --bg-primary: #F2F2F2;
-            --bg-secondary: #E8E8E8;
-            --bg-tertiary: #FFFFFF;
-            --text-primary: #2B2B2B;
-            --text-secondary: #7C7C7C;
-            --accent-primary: #3592C4;
-            --accent-secondary: #499C54;
-            --accent-warning: #C77D48;
-            --accent-error: #D16969;
-            --border-color: #D4D4D4;
-            --shadow: rgba(0, 0, 0, 0.15);
+            /* Modern Light Theme */
+            --bg-primary: #F8F9FA;
+            --bg-secondary: #FFFFFF;
+            --bg-tertiary: #F1F3F5;
+            --text-primary: #212529;
+            --text-secondary: #6C757D;
+            --accent-primary: #4F46E5;
+            --accent-secondary: #10B981;
+            --accent-warning: #F59E0B;
+            --accent-error: #EF4444;
+            --border-color: #E5E7EB;
+            --shadow: rgba(0, 0, 0, 0.1);
             --code-bg: #FFFFFF;
         }
 
         [data-theme="dark"] {
-            /* JetBrains PyCharm Dark Theme */
-            --bg-primary: #2B2B2B;
-            --bg-secondary: #3C3F41;
-            --bg-tertiary: #313335;
-            --text-primary: #BBBBBB;
-            --text-secondary: #9E9E9E;
-            --accent-primary: #3592C4;
-            --accent-secondary: #499C54;
-            --accent-warning: #C77D48;
-            --accent-error: #D16969;
-            --border-color: #555555;
-            --shadow: rgba(0, 0, 0, 0.4);
-            --code-bg: #2B2B2B;
+            /* Modern Dark Theme */
+            --bg-primary: #1F2937;
+            --bg-secondary: #374151;
+            --bg-tertiary: #111827;
+            --text-primary: #F9FAFB;
+            --text-secondary: #D1D5DB;
+            --accent-primary: #6366F1;
+            --accent-secondary: #34D399;
+            --accent-warning: #FBBF24;
+            --accent-error: #F87171;
+            --border-color: #4B5563;
+            --shadow: rgba(0, 0, 0, 0.5);
+            --code-bg: #1F2937;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
             background-color: var(--bg-primary);
             color: var(--text-primary);
             transition: background-color 0.3s, color 0.3s;
+            line-height: 1.6;
         }
 
         /* Login Screen */
@@ -66,16 +71,38 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%, #f093fb 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #loginScreen::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: backgroundMove 20s linear infinite;
+        }
+
+        @keyframes backgroundMove {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
         }
 
         .login-container {
             background: var(--bg-primary);
-            padding: 40px;
-            border-radius: 15px;
-            box-shadow: 0 10px 40px var(--shadow);
+            padding: 50px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             width: 100%;
-            max-width: 400px;
+            max-width: 450px;
+            position: relative;
+            z-index: 1;
+            backdrop-filter: blur(10px);
         }
 
         .login-container h1 {
@@ -274,16 +301,33 @@
         .level-card {
             background-color: var(--bg-secondary);
             border: 2px solid var(--border-color);
-            border-radius: 12px;
-            padding: 20px;
+            border-radius: 16px;
+            padding: 24px;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
+            overflow: hidden;
+        }
+
+        .level-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            transform: scaleX(0);
+            transition: transform 0.3s;
         }
 
         .level-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 20px var(--shadow);
+            transform: translateY(-8px);
+            box-shadow: 0 12px 30px var(--shadow);
+        }
+
+        .level-card:hover::before {
+            transform: scaleX(1);
         }
 
         .level-card.locked {
@@ -595,6 +639,12 @@
 
         .modal.active {
             display: flex;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
 
         .modal-content {
@@ -606,6 +656,18 @@
             max-height: 80vh;
             overflow-y: auto;
             box-shadow: 0 10px 40px var(--shadow);
+            animation: slideUp 0.4s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
         }
 
         .modal-header {
@@ -624,6 +686,114 @@
             display: flex;
             gap: 10px;
             justify-content: flex-end;
+        }
+
+        /* Language Welcome Modal */
+        .language-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .language-modal.active {
+            display: flex;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .language-modal-content {
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            padding: 50px;
+            border-radius: 25px;
+            max-width: 600px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+            animation: scaleIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        @keyframes scaleIn {
+            from {
+                transform: scale(0.7);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .language-modal-icon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0.1;
+            width: 300px;
+            height: 300px;
+            object-fit: contain;
+            z-index: 0;
+        }
+
+        .language-modal-text {
+            position: relative;
+            z-index: 1;
+        }
+
+        .language-modal-title {
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 20px;
+            color: var(--accent-primary);
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .language-modal-subtitle {
+            font-size: 20px;
+            margin-bottom: 25px;
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .language-modal-quote {
+            font-size: 18px;
+            font-style: italic;
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+            padding: 15px;
+            background-color: rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            border-left: 4px solid var(--accent-primary);
+        }
+
+        .language-modal-button {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: 700;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .language-modal-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .language-modal-button:active {
+            transform: translateY(-1px);
         }
 
         /* Notification */
@@ -668,6 +838,180 @@
         .notification.info {
             background-color: var(--accent-secondary);
             color: white;
+        }
+
+        /* Roblox Character Canvas */
+        .roblox-canvas-container {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, #87CEEB 0%, #98D8E8 50%, #90EE90 50%, #76D676 100%);
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #robloxCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .roblox-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+        }
+
+        /* SQL Table Styling */
+        .sql-results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .sql-results-table th {
+            background: var(--accent-primary);
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .sql-results-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .sql-results-table tr:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .sql-results-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .sql-info {
+            margin-top: 10px;
+            padding: 10px;
+            background: var(--accent-secondary);
+            color: white;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        /* Database Schema Panel */
+        .db-schema-panel {
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .db-schema-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .db-schema-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--accent-primary);
+        }
+
+        .db-table-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .db-table-tab {
+            padding: 8px 16px;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .db-table-tab:hover {
+            background: var(--bg-primary);
+        }
+
+        .db-table-tab.active {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+
+        .db-table-view {
+            display: none;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .db-table-view.active {
+            display: block;
+        }
+
+        .db-schema-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .db-schema-table th {
+            background: var(--accent-primary);
+            color: white;
+            padding: 8px 10px;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+
+        .db-schema-table td {
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .db-schema-table tr:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .db-schema-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .db-toggle-btn {
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-color);
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .db-toggle-btn:hover {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
         }
 
         /* Free Code Editor */
@@ -789,6 +1133,24 @@
                 </svg>
                 3. Python Bereich
             </button>
+            <button class="nav-tab" data-section="sql">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 6px;">
+                    <path d="M12 2C8.14 2 5 3.57 5 5.5v13c0 1.93 3.14 3.5 7 3.5s7-1.57 7-3.5v-13c0-1.93-3.14-3.5-7-3.5zm0 2c3.03 0 5 1.12 5 1.5S15.03 7 12 7 7 5.88 7 5.5 8.97 4 12 4zm0 14c-3.03 0-5-1.12-5-1.5v-2.09c1.17.76 2.95 1.09 5 1.09s3.83-.33 5-1.09v2.09c0 .38-1.97 1.5-5 1.5z"/>
+                </svg>
+                4. SQL Bereich
+            </button>
+            <button class="nav-tab" data-section="calliope">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 6px;">
+                    <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5zm0 2.18l8 4V17c0 4.52-3.13 8.77-7.5 9.93V4.18z"/>
+                </svg>
+                5. MiniCalliope
+            </button>
+            <button class="nav-tab" data-section="lua">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 6px;">
+                    <circle cx="12" cy="12" r="10"/>
+                </svg>
+                6. Lua & Roblox
+            </button>
             <button class="nav-tab" data-section="freeEditor">💻 Freier Code-Editor</button>
             <button class="nav-tab" data-section="statistics">📊 Statistiken</button>
             <button class="nav-tab" data-section="achievements">🏆 Erfolge</button>
@@ -841,6 +1203,58 @@
                 <div class="coding-screen" id="pythonCodingScreen"></div>
             </div>
 
+            <!-- SQL Section -->
+            <div class="section" data-section="sql">
+                <div class="level-overview">
+                    <h2 class="section-title">4. SQL Bereich - Datenbankabfragen</h2>
+                    <div class="difficulty-filter">
+                        <button class="difficulty-btn active" data-difficulty="all">Alle</button>
+                        <button class="difficulty-btn" data-difficulty="easy">Leicht</button>
+                        <button class="difficulty-btn" data-difficulty="medium">Mittel</button>
+                        <button class="difficulty-btn" data-difficulty="hard">Schwer</button>
+                    </div>
+                    <div class="levels-grid" id="sqlLevels"></div>
+                </div>
+                <div class="coding-screen" id="sqlCodingScreen"></div>
+            </div>
+
+            <!-- Calliope Section -->
+            <div class="section" data-section="calliope">
+                <div class="level-overview">
+                    <h2 class="section-title">5. MiniCalliope - Mikrocontroller Programmierung</h2>
+                    <p style="margin-bottom: 20px; color: var(--text-secondary); font-size: 16px;">
+                        Programmiere den Calliope Mini - wähle zwischen Block- oder Textbasierter Programmierung!
+                    </p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 30px;">
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 15px; text-align: center; cursor: pointer; transition: all 0.3s;" onclick="openCalliopeEditor('block')">
+                            <div style="font-size: 48px; margin-bottom: 15px;">🧱</div>
+                            <h3 style="color: white; font-size: 24px; margin-bottom: 10px;">Block-Editor</h3>
+                            <p style="color: rgba(255,255,255,0.9); font-size: 16px;">Programmiere mit visuellen Blöcken - perfekt für Einsteiger!</p>
+                        </div>
+                        <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 30px; border-radius: 15px; text-align: center; cursor: pointer; transition: all 0.3s;" onclick="openCalliopeEditor('text')">
+                            <div style="font-size: 48px; margin-bottom: 15px;">📝</div>
+                            <h3 style="color: white; font-size: 24px; margin-bottom: 10px;">Text-Editor</h3>
+                            <p style="color: rgba(255,255,255,0.9); font-size: 16px;">Programmiere mit JavaScript oder Python - für Fortgeschrittene!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lua Section -->
+            <div class="section" data-section="lua">
+                <div class="level-overview">
+                    <h2 class="section-title">6. Lua & Roblox - Spieleentwicklung</h2>
+                    <div class="difficulty-filter">
+                        <button class="difficulty-btn active" data-difficulty="all">Alle</button>
+                        <button class="difficulty-btn" data-difficulty="easy">Leicht</button>
+                        <button class="difficulty-btn" data-difficulty="medium">Mittel</button>
+                        <button class="difficulty-btn" data-difficulty="hard">Schwer</button>
+                    </div>
+                    <div class="levels-grid" id="luaLevels"></div>
+                </div>
+                <div class="coding-screen" id="luaCodingScreen"></div>
+            </div>
+
             <!-- Free Editor Section -->
             <div class="section" data-section="freeEditor">
                 <div class="level-overview">
@@ -853,6 +1267,8 @@
                             <option value="htmlmixed">HTML</option>
                             <option value="css">CSS</option>
                             <option value="python">Python</option>
+                            <option value="sql">SQL</option>
+                            <option value="lua">Lua</option>
                         </select>
                         <button class="btn btn-success" id="runFreeCode">▶ Code ausführen</button>
                         <button class="btn btn-secondary" id="clearFreeCode">🗑 Zurücksetzen</button>
@@ -919,6 +1335,21 @@
 
     <!-- Notification -->
     <div class="notification" id="notification"></div>
+
+    <!-- Language Welcome Modal -->
+    <div class="language-modal" id="languageModal">
+        <div class="language-modal-content">
+            <img id="languageModalIcon" class="language-modal-icon" src="" alt="Language Icon">
+            <div class="language-modal-text">
+                <h2 class="language-modal-title" id="languageModalTitle">Willkommen!</h2>
+                <p class="language-modal-subtitle" id="languageModalSubtitle">Schön, dass du dich für diese Übung entschieden hast!</p>
+                <div class="language-modal-quote" id="languageModalQuote">
+                    "Der beste Weg, die Zukunft vorherzusagen, ist, sie zu programmieren."
+                </div>
+                <button class="language-modal-button" onclick="closeLanguageModal()">Los geht's! 🚀</button>
+            </div>
+        </div>
+    </div>
 
     <script src="app.js"></script>
 </body>

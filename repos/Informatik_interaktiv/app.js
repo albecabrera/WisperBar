@@ -439,6 +439,317 @@ const LEVELS_DATA = {
                 return code.includes('{') && code.includes('}') && code.includes(':');
             }
         }
+    ],
+    sql: [
+        {
+            id: 'sql-1',
+            number: '4.1',
+            title: 'SQL Basics - SELECT Abfragen',
+            description: 'Lerne die grundlegende SELECT-Anweisung',
+            difficulty: 'easy',
+            task: 'Wähle alle Spalten aus der Tabelle "schueler" aus.',
+            starterCode: '-- Deine SQL Abfrage hier\nSELECT\n',
+            solution: 'SELECT * FROM schueler;',
+            hints: [
+                'Verwende SELECT * um alle Spalten auszuwählen',
+                'FROM gibt die Tabelle an',
+                'Vergiss nicht das Semikolon am Ende'
+            ],
+            validation: (code) => {
+                return code.toLowerCase().includes('select') && code.toLowerCase().includes('from');
+            }
+        },
+        {
+            id: 'sql-2',
+            number: '4.2',
+            title: 'SQL WHERE - Daten filtern',
+            description: 'Filtere Daten mit WHERE',
+            difficulty: 'easy',
+            task: 'Wähle alle Schüler aus, deren Alter (age) größer als 15 ist.',
+            starterCode: '-- Deine SQL Abfrage hier\nSELECT * FROM schueler WHERE\n',
+            solution: 'SELECT * FROM schueler WHERE age > 15;',
+            hints: [
+                'Verwende WHERE für Bedingungen',
+                'Der Vergleichsoperator > bedeutet "größer als"',
+                'Die Spalte heißt "age", nicht "alter"'
+            ],
+            validation: (code) => {
+                return code.toLowerCase().includes('where') && code.toLowerCase().includes('>');
+            }
+        },
+        {
+            id: 'sql-3',
+            number: '4.3',
+            title: 'SQL ORDER BY - Sortieren',
+            description: 'Sortiere Ergebnisse',
+            difficulty: 'medium',
+            task: 'Wähle alle Schüler aus und sortiere sie nach Namen aufsteigend.',
+            starterCode: '-- Deine SQL Abfrage hier\nSELECT * FROM schueler\n',
+            solution: 'SELECT * FROM schueler ORDER BY name ASC;',
+            hints: [
+                'ORDER BY sortiert die Ergebnisse',
+                'ASC = aufsteigend, DESC = absteigend',
+                'Syntax: ORDER BY spaltenname ASC'
+            ],
+            validation: (code) => {
+                return code.toLowerCase().includes('order by');
+            }
+        },
+        {
+            id: 'sql-4',
+            number: '4.4',
+            title: 'SQL INSERT - Daten einfügen',
+            description: 'Füge neue Daten ein',
+            difficulty: 'medium',
+            task: 'Füge einen neuen Schüler mit Namen "Tim Berger", Alter (age) 16 und Klasse "10a" ein.',
+            starterCode: '-- Deine SQL Abfrage hier\nINSERT INTO schueler\n',
+            solution: 'INSERT INTO schueler (name, age, klasse) VALUES (\'Tim Berger\', 16, \'10a\');',
+            hints: [
+                'INSERT INTO fügt Daten ein',
+                'Syntax: INSERT INTO tabelle (spalten) VALUES (werte)',
+                'Die Spalte heißt "age", nicht "alter"'
+            ],
+            validation: (code) => {
+                return code.toLowerCase().includes('insert into') && code.toLowerCase().includes('values');
+            }
+        },
+        {
+            id: 'sql-5',
+            number: '4.5',
+            title: 'SQL UPDATE - Daten aktualisieren',
+            description: 'Aktualisiere bestehende Daten',
+            difficulty: 'medium',
+            task: 'Aktualisiere die Klasse aller Schüler namens "Anna Müller" auf "10a".',
+            starterCode: '-- Deine SQL Abfrage hier\nUPDATE schueler\n',
+            solution: 'UPDATE schueler SET klasse = \'10a\' WHERE name = \'Anna Müller\';',
+            hints: [
+                'UPDATE aktualisiert Daten',
+                'SET gibt die neuen Werte an',
+                'WHERE filtert welche Zeilen aktualisiert werden'
+            ],
+            validation: (code) => {
+                return code.toLowerCase().includes('update') && code.toLowerCase().includes('set');
+            }
+        },
+        {
+            id: 'sql-6',
+            number: '4.6',
+            title: 'SQL DELETE - Daten löschen',
+            description: 'Lösche Daten aus der Datenbank',
+            difficulty: 'easy',
+            task: 'Lösche alle Noten, bei denen die Note schlechter als 3 ist (note > 3).',
+            starterCode: '-- Deine SQL Abfrage hier\nDELETE FROM noten\n',
+            solution: 'DELETE FROM noten WHERE note > 3;',
+            hints: [
+                'DELETE FROM löscht Daten',
+                'WHERE filtert welche Zeilen gelöscht werden',
+                'Sei vorsichtig: ohne WHERE werden ALLE Zeilen gelöscht!'
+            ],
+            validation: (code) => {
+                return code.toLowerCase().includes('delete from') && code.toLowerCase().includes('where');
+            }
+        },
+        {
+            id: 'sql-7',
+            number: '4.7',
+            title: 'SQL JOIN - Tabellen verknüpfen',
+            description: 'Verbinde mehrere Tabellen',
+            difficulty: 'hard',
+            task: 'Verbinde die Tabellen "schueler" und "noten" über die schueler_id.',
+            starterCode: '-- Deine SQL Abfrage hier\n',
+            solution: 'SELECT * FROM schueler JOIN noten ON schueler.id = noten.schueler_id;',
+            hints: [
+                'JOIN verbindet Tabellen',
+                'ON gibt die Verknüpfungsbedingung an',
+                'Syntax: JOIN tabelle2 ON tabelle1.spalte = tabelle2.spalte'
+            ],
+            validation: (code) => {
+                return code.toLowerCase().includes('join') && code.toLowerCase().includes('on');
+            }
+        }
+    ],
+    lua: [
+        {
+            id: 'lua-1',
+            number: '6.1',
+            title: 'Lua Basics - Erste Schritte',
+            description: 'Lerne Lua-Grundlagen kennen',
+            difficulty: 'easy',
+            task: 'Gib "Hallo Roblox!" mit print() aus.',
+            starterCode: '-- Dein Lua Code hier\n',
+            solution: 'print("Hallo Roblox!")',
+            hints: [
+                'Verwende print() um Text auszugeben',
+                'Strings stehen in Anführungszeichen',
+                'Lua braucht kein Semikolon am Ende'
+            ],
+            validation: (code) => {
+                return code.includes('print(');
+            }
+        },
+        {
+            id: 'lua-2',
+            number: '6.2',
+            title: 'Lua Variablen',
+            description: 'Erstelle und nutze Variablen',
+            difficulty: 'easy',
+            task: 'Erstelle eine Variable "name" mit deinem Namen und gib sie aus.',
+            starterCode: '-- Erstelle eine Variable\n',
+            solution: 'local name = "Max"\nprint(name)',
+            hints: [
+                'Variablen werden mit local definiert',
+                'Syntax: local variablenname = wert',
+                'Gib die Variable mit print() aus'
+            ],
+            validation: (code) => {
+                return code.includes('local') && code.includes('print(');
+            }
+        },
+        {
+            id: 'lua-3',
+            number: '6.3',
+            title: 'Roblox Figur bewegen',
+            description: 'Bewege deine Figur mit walk()',
+            difficulty: 'easy',
+            task: 'Bewege deine Figur 100 Pixel nach rechts mit walk(100).',
+            starterCode: '-- Bewege die Figur\n',
+            solution: 'walk(100)',
+            hints: [
+                'Verwende walk(distanz) um zu laufen',
+                'Positive Werte gehen nach rechts',
+                'Die Distanz ist in Pixeln'
+            ],
+            validation: (code) => {
+                return code.includes('walk(');
+            }
+        },
+        {
+            id: 'lua-4',
+            number: '6.4',
+            title: 'Roblox Figur drehen',
+            description: 'Drehe deine Figur',
+            difficulty: 'easy',
+            task: 'Drehe deine Figur um 90 Grad mit turn(90).',
+            starterCode: '-- Drehe die Figur\n',
+            solution: 'turn(90)',
+            hints: [
+                'Verwende turn(grad) zum Drehen',
+                'Positive Werte drehen im Uhrzeigersinn',
+                '90 Grad ist eine Vierteldrehung'
+            ],
+            validation: (code) => {
+                return code.includes('turn(');
+            }
+        },
+        {
+            id: 'lua-5',
+            number: '6.5',
+            title: 'Roblox Figur springen',
+            description: 'Lasse deine Figur springen',
+            difficulty: 'medium',
+            task: 'Lasse deine Figur springen mit jump().',
+            starterCode: '-- Springe!\n',
+            solution: 'jump()',
+            hints: [
+                'Verwende jump() zum Springen',
+                'Es werden keine Parameter benötigt',
+                'Die Sprunghöhe ist automatisch'
+            ],
+            validation: (code) => {
+                return code.includes('jump(');
+            }
+        },
+        {
+            id: 'lua-6',
+            number: '6.6',
+            title: 'Kombinierte Bewegungen',
+            description: 'Kombiniere mehrere Befehle',
+            difficulty: 'medium',
+            task: 'Laufe 50 Pixel, springe, und drehe um 180 Grad.',
+            starterCode: '-- Kombiniere die Befehle\n',
+            solution: 'walk(50)\njump()\nturn(180)',
+            hints: [
+                'Schreibe die Befehle untereinander',
+                'Jeder Befehl in einer neuen Zeile',
+                'Die Befehle werden nacheinander ausgeführt'
+            ],
+            validation: (code) => {
+                return code.includes('walk(') && code.includes('jump(') && code.includes('turn(');
+            }
+        },
+        {
+            id: 'lua-7',
+            number: '6.7',
+            title: 'Roblox Figur rennen',
+            description: 'Laufe schneller mit run()',
+            difficulty: 'medium',
+            task: 'Renne 150 Pixel mit run(150).',
+            starterCode: '-- Renne schnell!\n',
+            solution: 'run(150)',
+            hints: [
+                'run() ist schneller als walk()',
+                'Die Syntax ist gleich: run(distanz)',
+                'Nutze run() für schnelle Bewegungen'
+            ],
+            validation: (code) => {
+                return code.includes('run(');
+            }
+        },
+        {
+            id: 'lua-8',
+            number: '6.8',
+            title: 'Roblox Figur schießen',
+            description: 'Schieße Projektile',
+            difficulty: 'hard',
+            task: 'Schieße mit shoot().',
+            starterCode: '-- Schieße!\n',
+            solution: 'shoot()',
+            hints: [
+                'Verwende shoot() zum Schießen',
+                'Die Richtung ist automatisch',
+                'Kombiniere mit turn() für verschiedene Richtungen'
+            ],
+            validation: (code) => {
+                return code.includes('shoot(');
+            }
+        },
+        {
+            id: 'lua-9',
+            number: '6.9',
+            title: 'Lua Schleifen',
+            description: 'Wiederhole Aktionen mit Schleifen',
+            difficulty: 'hard',
+            task: 'Laufe 5 mal 20 Pixel mit einer for-Schleife.',
+            starterCode: '-- Nutze eine Schleife\n',
+            solution: 'for i = 1, 5 do\n  walk(20)\nend',
+            hints: [
+                'Lua Schleifen: for i = start, ende do ... end',
+                'Der Code zwischen do und end wird wiederholt',
+                'Einrückung macht den Code lesbarer'
+            ],
+            validation: (code) => {
+                return code.includes('for') && code.includes('do') && code.includes('end');
+            }
+        },
+        {
+            id: 'lua-10',
+            number: '6.10',
+            title: 'Komplexe Choreografie',
+            description: 'Erstelle eine Bewegungssequenz',
+            difficulty: 'hard',
+            task: 'Erstelle eine Sequenz: Laufe, springe, drehe, schieße, und renne zurück.',
+            starterCode: '-- Erstelle deine Choreografie\n',
+            solution: 'walk(50)\njump()\nturn(90)\nshoot()\nturn(180)\nrun(100)',
+            hints: [
+                'Kombiniere alle gelernten Befehle',
+                'Überlege dir die Reihenfolge',
+                'Jeder Befehl in einer neuen Zeile'
+            ],
+            validation: (code) => {
+                return code.includes('walk(') && code.includes('jump(') &&
+                       code.includes('turn(') && code.includes('shoot(');
+            }
+        }
     ]
 };
 
@@ -472,12 +783,26 @@ const ACHIEVEMENTS = [
         condition: (stats) => stats.pythonCompleted >= LEVELS_DATA.python.length
     },
     {
+        id: 'sql-master',
+        title: 'SQL Meister',
+        description: 'Alle SQL-Level abgeschlossen',
+        icon: '💾',
+        condition: (stats) => stats.sqlCompleted >= LEVELS_DATA.sql.length
+    },
+    {
+        id: 'lua-master',
+        title: 'Lua Meister',
+        description: 'Alle Lua-Level abgeschlossen',
+        icon: '🎮',
+        condition: (stats) => stats.luaCompleted >= LEVELS_DATA.lua.length
+    },
+    {
         id: 'perfectionist',
         title: 'Perfektionist',
         description: 'Alle Level abgeschlossen',
         icon: '⭐',
         condition: (stats) => {
-            const total = LEVELS_DATA.html.length + LEVELS_DATA.css.length + LEVELS_DATA.python.length;
+            const total = LEVELS_DATA.html.length + LEVELS_DATA.css.length + LEVELS_DATA.python.length + LEVELS_DATA.sql.length + LEVELS_DATA.lua.length;
             return stats.totalCompleted >= total;
         }
     },
@@ -513,6 +838,9 @@ let editor = null;
 let freeEditor = null;
 let pyodideReady = false;
 let pyodide = null;
+let sqlDB = null;
+let sqlReady = false;
+let luaReady = false;
 
 let userProgress = {
     completedLevels: [],
@@ -521,6 +849,8 @@ let userProgress = {
         htmlCompleted: 0,
         cssCompleted: 0,
         pythonCompleted: 0,
+        sqlCompleted: 0,
+        luaCompleted: 0,
         totalAttempts: 0,
         hintsUsed: 0,
         solutionsViewed: 0,
@@ -528,7 +858,8 @@ let userProgress = {
         firstTrySuccess: 0
     },
     levelStats: {},
-    unlockedAchievements: []
+    unlockedAchievements: [],
+    languageModalShown: {}
 };
 
 // ==================== INITIALIZATION ====================
@@ -553,6 +884,12 @@ function initializeApp() {
 
     // Initialize Pyodide for Python execution
     initializePyodide();
+
+    // Initialize SQL.js database
+    initializeSQL();
+
+    // Initialize Lua
+    initializeLua();
 }
 
 function setupEventListeners() {
@@ -686,6 +1023,11 @@ function switchSection(section) {
 
     currentSection = section;
 
+    // Show welcome modal for programming sections (not statistics, achievements, etc.)
+    if (['html', 'css', 'python', 'sql', 'lua'].includes(section)) {
+        showLanguageWelcomeModal(section);
+    }
+
     // Initialize section if needed
     if (section === 'freeEditor' && !freeEditor) {
         initializeFreeEditor();
@@ -696,6 +1038,8 @@ function initializeSections() {
     renderLevelGrid('html');
     renderLevelGrid('css');
     renderLevelGrid('python');
+    renderLevelGrid('sql');
+    renderLevelGrid('lua');
     initializeFreeEditor();
 }
 
@@ -740,10 +1084,92 @@ function createLevelCard(level, language, index) {
     return card;
 }
 
+// ==================== LANGUAGE WELCOME MODAL ====================
+
+const LANGUAGE_INFO = {
+    html: {
+        name: 'HTML',
+        icon: 'img/html.png',
+        quote: '"HTML ist die Sprache, mit der wir das Web strukturieren. Jede Website beginnt hier!"'
+    },
+    css: {
+        name: 'CSS',
+        icon: 'img/css.png',
+        quote: '"Mit CSS hauchen wir dem Web Leben ein. Design ist nicht nur wie es aussieht, sondern wie es funktioniert!"'
+    },
+    python: {
+        name: 'Python',
+        icon: 'img/python.png',
+        quote: '"Python ist eine der mächtigsten Sprachen der Welt. Von KI bis Webentwicklung - Python kann alles!"'
+    },
+    sql: {
+        name: 'SQL',
+        icon: 'img/sql.png',
+        quote: '"Daten sind das neue Gold. Mit SQL lernst du, diese Schätze zu heben und zu verwalten!"'
+    },
+    lua: {
+        name: 'Lua',
+        icon: 'img/lua.png',
+        quote: '"Lua ist die Sprache der Spieleentwicklung! Mit Roblox kannst du deine eigenen Welten erschaffen!"'
+    }
+};
+
+function showLanguageWelcomeModal(language) {
+    // Check if modal was already shown for this language in this session
+    if (userProgress.languageModalShown[language]) {
+        return;
+    }
+
+    const langInfo = LANGUAGE_INFO[language];
+    if (!langInfo) return;
+
+    const modal = document.getElementById('languageModal');
+    const title = document.getElementById('languageModalTitle');
+    const subtitle = document.getElementById('languageModalSubtitle');
+    const quote = document.getElementById('languageModalQuote');
+    const icon = document.getElementById('languageModalIcon');
+
+    title.textContent = `Willkommen bei ${langInfo.name}!`;
+    subtitle.textContent = `Schön, dass du dich für diese Übung in ${langInfo.name} entschieden hast!`;
+    quote.textContent = langInfo.quote;
+    icon.src = langInfo.icon;
+
+    modal.classList.add('active');
+
+    // Mark as shown
+    userProgress.languageModalShown[language] = true;
+    saveUserProgress();
+}
+
+function closeLanguageModal() {
+    const modal = document.getElementById('languageModal');
+    modal.classList.remove('active');
+}
+
+// ==================== CALLIOPE FUNCTIONS ====================
+
+function openCalliopeEditor(mode) {
+    if (mode === 'block') {
+        // Open block editor
+        window.open('https://makecode.calliope.cc/#editor', '_blank');
+        showNotification('Block-Editor wird in neuem Tab geöffnet...', 'info');
+    } else if (mode === 'text') {
+        // Open text editor (JavaScript mode)
+        window.open('https://makecode.calliope.cc/#editor', '_blank');
+        showNotification('Text-Editor wird in neuem Tab geöffnet... Wechsle dort zu JavaScript!', 'info');
+    }
+}
+
 // ==================== LEVEL SCREEN ====================
 
 function openLevel(level, language) {
     currentLevel = level;
+
+    // Show welcome modal on first level of each language
+    const levelIndex = LEVELS_DATA[language].findIndex(l => l.id === level.id);
+    if (levelIndex === 0) {
+        showLanguageWelcomeModal(language);
+    }
 
     // Hide level overview
     const section = document.querySelector(`.section[data-section="${language}"]`);
@@ -771,6 +1197,10 @@ function openLevel(level, language) {
 }
 
 function createCodingScreen(level, language) {
+    const needsConsole = language === 'python' || language === 'sql';
+    const needsCanvas = language === 'lua';
+    const needsDBSchema = language === 'sql';
+
     return `
         <div class="coding-header">
             <div class="coding-title">${level.number} - ${level.title}</div>
@@ -783,6 +1213,7 @@ function createCodingScreen(level, language) {
                 <button class="btn btn-secondary" onclick="skipLevel('${language}')">⏭ Überspringen</button>
             </div>
         </div>
+        ${needsDBSchema ? '<div id="dbSchemaContainer"></div>' : ''}
         <div class="coding-workspace">
             <div class="editor-panel">
                 <div class="panel-header">Code Editor</div>
@@ -791,7 +1222,9 @@ function createCodingScreen(level, language) {
             <div class="output-panel">
                 <div class="panel-header">Ausgabe / Vorschau</div>
                 <div class="output-content">
-                    ${language === 'python' ?
+                    ${needsCanvas ?
+                        '<div class="roblox-canvas-container"><canvas id="robloxCanvas"></canvas></div>' :
+                        needsConsole ?
                         '<div class="output-console" id="outputConsole"></div>' :
                         '<iframe class="output-iframe" id="outputPreview"></iframe>'
                     }
@@ -802,7 +1235,12 @@ function createCodingScreen(level, language) {
 }
 
 function initializeEditor(level, language) {
-    const mode = language === 'html' || language === 'css' ? 'htmlmixed' : 'python';
+    let mode = 'htmlmixed';
+    if (language === 'python') mode = 'python';
+    else if (language === 'sql') mode = 'sql';
+    else if (language === 'lua') mode = 'lua';
+    else if (language === 'css' || language === 'html') mode = 'htmlmixed';
+
     const theme = document.documentElement.dataset.theme === 'dark' ? 'monokai' : 'eclipse';
 
     editor = CodeMirror(document.getElementById('codeEditor'), {
@@ -818,6 +1256,18 @@ function initializeEditor(level, language) {
     });
 
     editor.setSize('100%', '100%');
+
+    // Initialize canvas for Lua
+    if (language === 'lua') {
+        initializeRobloxCanvas();
+    }
+
+    // Initialize database schema for SQL
+    if (language === 'sql') {
+        setTimeout(() => {
+            renderDatabaseSchema();
+        }, 100);
+    }
 }
 
 function backToLevels(language) {
@@ -849,6 +1299,10 @@ function runCode() {
 
     if (language === 'python') {
         runPythonCode(code);
+    } else if (language === 'sql') {
+        runSQLCode(code);
+    } else if (language === 'lua') {
+        runLuaCode(code);
     } else {
         runHTMLCSSCode(code);
     }
@@ -897,6 +1351,70 @@ sys.stdout = io.StringIO()
         checkSolution(code);
     } catch (err) {
         outputConsole.innerHTML = `<div class="error">Fehler: ${err.message}</div>`;
+        playSound('error');
+    }
+}
+
+function runSQLCode(code) {
+    const outputConsole = document.getElementById('outputConsole');
+
+    if (!sqlReady || !sqlDB) {
+        outputConsole.innerHTML = '<div class="error">SQL-Datenbank wird geladen... Bitte warte einen Moment.</div>';
+        return;
+    }
+
+    try {
+        // Execute the SQL query
+        const results = sqlDB.exec(code);
+
+        if (results.length === 0) {
+            // No results (e.g., INSERT, UPDATE, DELETE)
+            outputConsole.innerHTML = `
+                <div class="output-line success">✓ SQL Abfrage erfolgreich ausgeführt!</div>
+                <div class="output-line" style="margin-top: 10px; padding: 10px; background: var(--bg-secondary); border-radius: 5px;">
+                    <strong>Deine Abfrage:</strong><br>
+                    <code>${escapeHtml(code)}</code>
+                </div>
+            `;
+        } else {
+            // Display results as table
+            const result = results[0];
+            const columns = result.columns;
+            const values = result.values;
+
+            let tableHTML = '<table class="sql-results-table"><thead><tr>';
+
+            columns.forEach(col => {
+                tableHTML += `<th>${escapeHtml(col)}</th>`;
+            });
+
+            tableHTML += '</tr></thead><tbody>';
+
+            values.forEach(row => {
+                tableHTML += '<tr>';
+                row.forEach(cell => {
+                    tableHTML += `<td>${escapeHtml(String(cell))}</td>`;
+                });
+                tableHTML += '</tr>';
+            });
+
+            tableHTML += '</tbody></table>';
+
+            outputConsole.innerHTML = `
+                <div class="sql-info">
+                    ✓ Abfrage erfolgreich! ${values.length} Zeile(n) gefunden.
+                </div>
+                ${tableHTML}
+            `;
+        }
+
+        // Check solution
+        setTimeout(() => {
+            checkSolution(code);
+        }, 500);
+
+    } catch (err) {
+        outputConsole.innerHTML = `<div class="error">SQL Fehler: ${escapeHtml(err.message)}</div>`;
         playSound('error');
     }
 }
@@ -1034,7 +1552,9 @@ function handleFreeEditorLanguageChange(e) {
     const placeholders = {
         'htmlmixed': '<!-- Schreibe deinen HTML Code hier -->\n',
         'css': '/* Schreibe dein CSS hier */\n',
-        'python': '# Schreibe deinen Python Code hier\n'
+        'python': '# Schreibe deinen Python Code hier\n',
+        'sql': '-- Schreibe deine SQL Abfrage hier\nSELECT * FROM schueler;\n',
+        'lua': '-- Schreibe deinen Lua Code hier\nprint("Hallo Roblox!")\n'
     };
 
     if (freeEditor.getValue().trim() === '' || freeEditor.getValue().includes('Schreibe deinen')) {
@@ -1045,7 +1565,7 @@ function handleFreeEditorLanguageChange(e) {
     const preview = document.getElementById('freePreview');
     const console = document.getElementById('freeOutput');
 
-    if (language === 'python') {
+    if (language === 'python' || language === 'sql' || language === 'lua') {
         preview.style.display = 'none';
         console.style.display = 'block';
     } else {
@@ -1060,6 +1580,10 @@ function runFreeCode() {
 
     if (language === 'python') {
         runFreePython(code);
+    } else if (language === 'sql') {
+        runFreeSQL(code);
+    } else if (language === 'lua') {
+        runFreeLua(code);
     } else {
         runFreeHTMLCSS(code);
     }
@@ -1100,12 +1624,115 @@ sys.stdout = io.StringIO()
     }
 }
 
+function runFreeSQL(code) {
+    const output = document.getElementById('freeOutput');
+
+    if (!sqlReady || !sqlDB) {
+        output.innerHTML = '<div class="error">SQL-Datenbank wird geladen... Bitte warte einen Moment.</div>';
+        return;
+    }
+
+    try {
+        const results = sqlDB.exec(code);
+
+        if (results.length === 0) {
+            output.innerHTML = `
+                <div class="output-line success">✓ SQL Abfrage erfolgreich ausgeführt!</div>
+                <div class="output-line" style="margin-top: 10px; padding: 10px; background: var(--bg-secondary); border-radius: 5px;">
+                    <strong>Deine Abfrage:</strong><br>
+                    <code>${escapeHtml(code)}</code>
+                </div>
+            `;
+        } else {
+            const result = results[0];
+            const columns = result.columns;
+            const values = result.values;
+
+            let tableHTML = '<table class="sql-results-table"><thead><tr>';
+            columns.forEach(col => {
+                tableHTML += `<th>${escapeHtml(col)}</th>`;
+            });
+            tableHTML += '</tr></thead><tbody>';
+            values.forEach(row => {
+                tableHTML += '<tr>';
+                row.forEach(cell => {
+                    tableHTML += `<td>${escapeHtml(String(cell))}</td>`;
+                });
+                tableHTML += '</tr>';
+            });
+            tableHTML += '</tbody></table>';
+
+            output.innerHTML = `
+                <div class="sql-info">
+                    ✓ Abfrage erfolgreich! ${values.length} Zeile(n) gefunden.
+                </div>
+                ${tableHTML}
+            `;
+        }
+
+        showNotification('SQL-Code ausgeführt!', 'success');
+    } catch (err) {
+        output.innerHTML = `<div class="error">SQL Fehler: ${escapeHtml(err.message)}</div>`;
+        showNotification('SQL Fehler!', 'error');
+    }
+}
+
+function runFreeLua(code) {
+    const output = document.getElementById('freeOutput');
+
+    if (!luaReady) {
+        output.innerHTML = '<div class="error">Lua wird geladen... Bitte warte einen Moment.</div>';
+        return;
+    }
+
+    try {
+        // Capture console output
+        let consoleOutput = [];
+        const originalLog = console.log;
+        console.log = function(...args) {
+            consoleOutput.push(args.join(' '));
+            originalLog.apply(console, args);
+        };
+
+        const luaEnv = `
+            function print(...)
+                local args = {...}
+                local str = ""
+                for i, v in ipairs(args) do
+                    str = str .. tostring(v)
+                    if i < #args then str = str .. "\\t" end
+                end
+                js.global.console:log(str)
+            end
+
+            ${code}
+        `;
+
+        fengari.load(luaEnv)();
+
+        console.log = originalLog;
+
+        if (consoleOutput.length > 0) {
+            output.innerHTML = `<div class="output-line success">${consoleOutput.join('\n')}</div>`;
+        } else {
+            output.innerHTML = '<div class="output-line success">Programm ausgeführt (keine Ausgabe)</div>';
+        }
+
+        showNotification('Lua-Code ausgeführt!', 'success');
+    } catch (err) {
+        output.innerHTML = `<div class="error">Lua Fehler: ${escapeHtml(err.message)}</div>`;
+        showNotification('Lua Fehler!', 'error');
+    }
+}
+
 function clearFreeCode() {
     const language = document.getElementById('freeEditorLanguage').value;
     const placeholders = {
         'htmlmixed': '<!-- Schreibe deinen HTML Code hier -->\n',
         'css': '/* Schreibe dein CSS hier */\n',
-        'python': '# Schreibe deinen Python Code hier\n'
+        'python': '# Schreibe deinen Python Code hier\n',
+        'sql': '-- Schreibe deine SQL Abfrage hier\nSELECT * FROM schueler;\n',
+        'lua': '-- Schreibe deinen Lua Code hier\nprint("Hallo Roblox!")\n'
     };
 
     freeEditor.setValue(placeholders[language]);
@@ -1126,10 +1753,470 @@ async function initializePyodide() {
     }
 }
 
+// ==================== DATABASE SCHEMA VIEWER ====================
+
+function renderDatabaseSchema() {
+    const container = document.getElementById('dbSchemaContainer');
+    if (!container || !sqlReady || !sqlDB) return;
+
+    container.innerHTML = `
+        <div class="db-schema-panel">
+            <div class="db-schema-header">
+                <div class="db-schema-title">📊 Datenbank Referenz</div>
+                <button class="db-toggle-btn" onclick="toggleDBSchema()">Ausblenden</button>
+            </div>
+            <div class="db-table-tabs">
+                <button class="db-table-tab active" onclick="switchDBTable('schueler')">Schüler</button>
+                <button class="db-table-tab" onclick="switchDBTable('noten')">Noten</button>
+                <button class="db-table-tab" onclick="switchDBTable('kurse')">Kurse</button>
+            </div>
+            <div id="dbTableContent"></div>
+        </div>
+    `;
+
+    // Load initial table
+    switchDBTable('schueler');
+}
+
+function switchDBTable(tableName) {
+    if (!sqlReady || !sqlDB) return;
+
+    // Update active tab
+    document.querySelectorAll('.db-table-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    event?.target?.classList?.add('active') || document.querySelector(`.db-table-tab:first-child`).classList.add('active');
+
+    try {
+        const result = sqlDB.exec(`SELECT * FROM ${tableName}`);
+        const content = document.getElementById('dbTableContent');
+
+        if (result.length === 0) {
+            content.innerHTML = '<p style="color: var(--text-secondary);">Keine Daten gefunden.</p>';
+            return;
+        }
+
+        const columns = result[0].columns;
+        const values = result[0].values;
+
+        let tableHTML = '<div class="db-table-view active"><table class="db-schema-table"><thead><tr>';
+
+        columns.forEach(col => {
+            tableHTML += `<th>${escapeHtml(col)}</th>`;
+        });
+
+        tableHTML += '</tr></thead><tbody>';
+
+        values.forEach(row => {
+            tableHTML += '<tr>';
+            row.forEach(cell => {
+                tableHTML += `<td>${escapeHtml(String(cell))}</td>`;
+            });
+            tableHTML += '</tr>';
+        });
+
+        tableHTML += '</tbody></table></div>';
+
+        content.innerHTML = tableHTML;
+    } catch (err) {
+        console.error('Error loading table:', err);
+        document.getElementById('dbTableContent').innerHTML = `<p style="color: red;">Fehler beim Laden der Tabelle: ${escapeHtml(err.message)}</p>`;
+    }
+}
+
+function toggleDBSchema() {
+    const panel = document.querySelector('.db-schema-panel');
+    const btn = document.querySelector('.db-toggle-btn');
+
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        btn.textContent = 'Ausblenden';
+    } else {
+        panel.style.display = 'none';
+        btn.textContent = 'Einblenden';
+    }
+}
+
+// ==================== SQL.JS INITIALIZATION ====================
+
+async function initializeSQL() {
+    try {
+        const SQL = await initSqlJs({
+            locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+        });
+
+        // Try to load the database file
+        try {
+            const response = await fetch('schuldb.sqlite');
+            if (response.ok) {
+                const buffer = await response.arrayBuffer();
+                sqlDB = new SQL.Database(new Uint8Array(buffer));
+                console.log('SQL database loaded from file');
+            } else {
+                throw new Error('Database file not found, creating in-memory database');
+            }
+        } catch (fetchError) {
+            console.log('Creating in-memory database:', fetchError.message);
+            // Fallback: Create database in memory
+            sqlDB = new SQL.Database();
+
+            // Create tables
+            sqlDB.run(`
+                CREATE TABLE schueler (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    age INTEGER,
+                    klasse TEXT
+                );
+            `);
+
+            sqlDB.run(`
+                CREATE TABLE noten (
+                    id INTEGER PRIMARY KEY,
+                    schueler_id INTEGER,
+                    fach TEXT,
+                    note INTEGER,
+                    FOREIGN KEY(schueler_id) REFERENCES schueler(id)
+                );
+            `);
+
+            sqlDB.run(`
+                CREATE TABLE kurse (
+                    id INTEGER PRIMARY KEY,
+                    kursname TEXT,
+                    lehrer TEXT,
+                    raum TEXT
+                );
+            `);
+
+            // Insert sample data - Schueler
+            sqlDB.run(`
+                INSERT INTO schueler (id, name, age, klasse) VALUES
+                (1, 'Anna Müller', 15, '9a'),
+                (2, 'Ben Schmidt', 16, '10b'),
+                (3, 'Clara Wagner', 15, '9a'),
+                (4, 'David Klein', 17, '11c'),
+                (5, 'Emma Fischer', 16, '10b'),
+                (6, 'Felix Weber', 15, '9a'),
+                (7, 'Greta Meyer', 16, '10a'),
+                (8, 'Hannah Bauer', 17, '11c'),
+                (9, 'Leon Hoffmann', 15, '9b'),
+                (10, 'Maria Schneider', 16, '10a');
+            `);
+
+            // Insert sample data - Noten
+            sqlDB.run(`
+                INSERT INTO noten (id, schueler_id, fach, note) VALUES
+                (1, 1, 'Mathematik', 2),
+                (2, 1, 'Deutsch', 1),
+                (3, 1, 'Englisch', 2),
+                (4, 1, 'Informatik', 1),
+                (5, 2, 'Mathematik', 3),
+                (6, 2, 'Deutsch', 2),
+                (7, 2, 'Englisch', 3),
+                (8, 2, 'Informatik', 2),
+                (9, 3, 'Mathematik', 1),
+                (10, 3, 'Deutsch', 2),
+                (11, 3, 'Englisch', 1),
+                (12, 3, 'Informatik', 1),
+                (13, 4, 'Mathematik', 2),
+                (14, 4, 'Deutsch', 3),
+                (15, 4, 'Englisch', 2),
+                (16, 4, 'Informatik', 2),
+                (17, 5, 'Mathematik', 3),
+                (18, 5, 'Deutsch', 3),
+                (19, 5, 'Englisch', 2),
+                (20, 5, 'Informatik', 3),
+                (21, 6, 'Mathematik', 2),
+                (22, 6, 'Deutsch', 2),
+                (23, 6, 'Englisch', 2),
+                (24, 6, 'Informatik', 1),
+                (25, 7, 'Mathematik', 1),
+                (26, 7, 'Deutsch', 1),
+                (27, 7, 'Englisch', 1),
+                (28, 7, 'Informatik', 1),
+                (29, 8, 'Mathematik', 2),
+                (30, 8, 'Deutsch', 2),
+                (31, 8, 'Englisch', 3),
+                (32, 8, 'Informatik', 2),
+                (33, 9, 'Mathematik', 3),
+                (34, 9, 'Deutsch', 3),
+                (35, 9, 'Englisch', 3),
+                (36, 9, 'Informatik', 3),
+                (37, 10, 'Mathematik', 2),
+                (38, 10, 'Deutsch', 1),
+                (39, 10, 'Englisch', 2),
+                (40, 10, 'Informatik', 1);
+            `);
+
+            // Insert sample data - Kurse
+            sqlDB.run(`
+                INSERT INTO kurse (id, kursname, lehrer, raum) VALUES
+                (1, 'Informatik Grundlagen', 'Herr Müller', 'R101'),
+                (2, 'Web-Entwicklung', 'Frau Schmidt', 'R102'),
+                (3, 'Datenbanken', 'Herr Weber', 'R103'),
+                (4, 'Python Programmierung', 'Frau Klein', 'R104'),
+                (5, 'JavaScript Basics', 'Herr Meyer', 'R105'),
+                (6, 'App-Entwicklung', 'Frau Becker', 'R106');
+            `);
+        }
+
+        sqlReady = true;
+        console.log('SQL.js loaded and database initialized');
+    } catch (err) {
+        console.error('Failed to initialize SQL.js:', err);
+        sqlReady = false;
+    }
+}
+
+// ==================== LUA INITIALIZATION ====================
+
+function initializeLua() {
+    if (typeof fengari !== 'undefined') {
+        luaReady = true;
+        console.log('Fengari Lua loaded successfully');
+    } else {
+        luaReady = false;
+        console.error('Fengari Lua not available');
+    }
+}
+
+// ==================== ROBLOX CANVAS IMPLEMENTATION ====================
+
+let robloxCharacter = {
+    x: 200,
+    y: 300,
+    angle: 0,
+    width: 40,
+    height: 60,
+    speed: 2
+};
+
+let robloxCanvas = null;
+let robloxCtx = null;
+let projectiles = [];
+
+function initializeRobloxCanvas() {
+    robloxCanvas = document.getElementById('robloxCanvas');
+    if (!robloxCanvas) return;
+
+    robloxCanvas.width = robloxCanvas.offsetWidth;
+    robloxCanvas.height = robloxCanvas.offsetHeight;
+    robloxCtx = robloxCanvas.getContext('2d');
+
+    // Reset character position
+    robloxCharacter = {
+        x: robloxCanvas.width / 2,
+        y: robloxCanvas.height - 100,
+        angle: 0,
+        width: 40,
+        height: 60,
+        speed: 2
+    };
+
+    projectiles = [];
+
+    drawRobloxScene();
+}
+
+function drawRobloxScene() {
+    if (!robloxCanvas || !robloxCtx) return;
+
+    // Clear canvas
+    robloxCtx.clearRect(0, 0, robloxCanvas.width, robloxCanvas.height);
+
+    // Draw ground
+    robloxCtx.fillStyle = '#90EE90';
+    robloxCtx.fillRect(0, robloxCanvas.height - 50, robloxCanvas.width, 50);
+
+    // Draw character
+    robloxCtx.save();
+    robloxCtx.translate(robloxCharacter.x, robloxCharacter.y);
+    robloxCtx.rotate((robloxCharacter.angle * Math.PI) / 180);
+
+    // Body (rectangle)
+    robloxCtx.fillStyle = '#4A90E2';
+    robloxCtx.fillRect(-robloxCharacter.width / 2, -robloxCharacter.height / 2, robloxCharacter.width, robloxCharacter.height * 0.6);
+
+    // Head (circle)
+    robloxCtx.fillStyle = '#FFD700';
+    robloxCtx.beginPath();
+    robloxCtx.arc(0, -robloxCharacter.height / 2 - 10, 15, 0, Math.PI * 2);
+    robloxCtx.fill();
+
+    // Eyes
+    robloxCtx.fillStyle = '#000';
+    robloxCtx.fillRect(-7, -robloxCharacter.height / 2 - 13, 5, 5);
+    robloxCtx.fillRect(2, -robloxCharacter.height / 2 - 13, 5, 5);
+
+    // Arms
+    robloxCtx.fillStyle = '#4A90E2';
+    robloxCtx.fillRect(-robloxCharacter.width / 2 - 8, -robloxCharacter.height / 2, 8, 25);
+    robloxCtx.fillRect(robloxCharacter.width / 2, -robloxCharacter.height / 2, 8, 25);
+
+    // Legs
+    robloxCtx.fillRect(-robloxCharacter.width / 4 - 5, robloxCharacter.height * 0.1, 10, 25);
+    robloxCtx.fillRect(robloxCharacter.width / 4 - 5, robloxCharacter.height * 0.1, 10, 25);
+
+    robloxCtx.restore();
+
+    // Draw projectiles
+    projectiles.forEach((proj, index) => {
+        robloxCtx.fillStyle = '#FF6347';
+        robloxCtx.beginPath();
+        robloxCtx.arc(proj.x, proj.y, 5, 0, Math.PI * 2);
+        robloxCtx.fill();
+
+        // Update projectile position
+        proj.x += Math.cos((proj.angle * Math.PI) / 180) * 5;
+        proj.y += Math.sin((proj.angle * Math.PI) / 180) * 5;
+
+        // Remove if out of bounds
+        if (proj.x < 0 || proj.x > robloxCanvas.width || proj.y < 0 || proj.y > robloxCanvas.height) {
+            projectiles.splice(index, 1);
+        }
+    });
+}
+
+function animateRobloxCharacter(action, params, callback) {
+    const frames = 30;
+    let currentFrame = 0;
+
+    const animate = () => {
+        if (currentFrame >= frames) {
+            if (callback) callback();
+            return;
+        }
+
+        switch (action) {
+            case 'walk':
+                robloxCharacter.x += (params.distance / frames) * Math.cos((robloxCharacter.angle * Math.PI) / 180);
+                robloxCharacter.y += (params.distance / frames) * Math.sin((robloxCharacter.angle * Math.PI) / 180);
+                break;
+            case 'run':
+                robloxCharacter.x += (params.distance / frames) * Math.cos((robloxCharacter.angle * Math.PI) / 180);
+                robloxCharacter.y += (params.distance / frames) * Math.sin((robloxCharacter.angle * Math.PI) / 180);
+                break;
+            case 'turn':
+                robloxCharacter.angle += params.degrees / frames;
+                break;
+            case 'jump':
+                const jumpHeight = 50;
+                const progress = currentFrame / frames;
+                const jumpOffset = Math.sin(progress * Math.PI) * jumpHeight;
+                robloxCharacter.y = params.originalY - jumpOffset;
+                break;
+        }
+
+        drawRobloxScene();
+        currentFrame++;
+        requestAnimationFrame(animate);
+    };
+
+    animate();
+}
+
+// Lua command implementations
+function walk(distance) {
+    animateRobloxCharacter('walk', { distance: distance });
+}
+
+function run(distance) {
+    animateRobloxCharacter('run', { distance: distance * 1.5 });
+}
+
+function turn(degrees) {
+    animateRobloxCharacter('turn', { degrees: degrees });
+}
+
+function jump() {
+    const originalY = robloxCharacter.y;
+    animateRobloxCharacter('jump', { originalY: originalY }, () => {
+        robloxCharacter.y = originalY;
+    });
+}
+
+function shoot() {
+    projectiles.push({
+        x: robloxCharacter.x,
+        y: robloxCharacter.y,
+        angle: robloxCharacter.angle
+    });
+
+    // Animate projectiles
+    const animateProjectiles = () => {
+        drawRobloxScene();
+        if (projectiles.length > 0) {
+            requestAnimationFrame(animateProjectiles);
+        }
+    };
+    animateProjectiles();
+}
+
+// ==================== LUA CODE EXECUTION ====================
+
+function runLuaCode(code) {
+    if (!luaReady) {
+        showNotification('Lua wird geladen... Bitte warte.', 'warning');
+        return;
+    }
+
+    try {
+        // Reset character
+        initializeRobloxCanvas();
+
+        // Create Lua environment with custom functions
+        const luaEnv = `
+            function walk(dist)
+                js.global:walk(dist)
+            end
+
+            function run(dist)
+                js.global:run(dist)
+            end
+
+            function turn(deg)
+                js.global:turn(deg)
+            end
+
+            function jump()
+                js.global:jump()
+            end
+
+            function shoot()
+                js.global:shoot()
+            end
+
+            function print(...)
+                local args = {...}
+                local str = ""
+                for i, v in ipairs(args) do
+                    str = str .. tostring(v)
+                    if i < #args then str = str .. "\\t" end
+                end
+                js.global.console:log(str)
+            end
+
+            ${code}
+        `;
+
+        fengari.load(luaEnv)();
+
+        // Check solution
+        setTimeout(() => {
+            checkSolution(code);
+        }, 1000);
+
+    } catch (err) {
+        showNotification('Lua Fehler: ' + err.message, 'error');
+        console.error('Lua execution error:', err);
+    }
+}
+
 // ==================== STATISTICS & ACHIEVEMENTS ====================
 
 function updateProgress() {
-    const totalLevels = LEVELS_DATA.html.length + LEVELS_DATA.css.length + LEVELS_DATA.python.length;
+    const totalLevels = LEVELS_DATA.html.length + LEVELS_DATA.css.length + LEVELS_DATA.python.length + LEVELS_DATA.sql.length + LEVELS_DATA.lua.length;
     const completed = userProgress.stats.totalCompleted;
     const percentage = Math.round((completed / totalLevels) * 100);
 

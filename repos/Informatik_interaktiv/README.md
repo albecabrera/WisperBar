@@ -1,21 +1,29 @@
 # 🚀 Informatik Interaktiv - Programmieren Lernen
 
-Eine interaktive Lernplattform für den Informatikunterricht mit HTML, CSS und Python.
-
 ---
-
-## 🌐 **Live-Demo**
 
 <div align="center">
 
-### **[🎯 Zur interaktiven Lernplattform →](https://albecabrera.github.io/Informatik_interaktiv/)**
+## 🌐 **DIREKT ZUR PLATTFORM**
 
-[![Launch App](https://img.shields.io/badge/🚀_Plattform_starten-4CAF50?style=for-the-badge)](https://albecabrera.github.io/Informatik_interaktiv/)
-[![Admin Panel](https://img.shields.io/badge/⚙️_Admin_Panel-2196F3?style=for-the-badge)](https://albecabrera.github.io/Informatik_interaktiv/admin.html)
+### 🎯 **[https://albecabrera.github.io/Informatik_interaktiv/](https://albecabrera.github.io/Informatik_interaktiv/)**
+
+```
+https://albecabrera.github.io/Informatik_interaktiv/
+```
+
+[![🚀 Zur Lernplattform](https://img.shields.io/badge/🚀_ZUR_LERNPLATTFORM-4CAF50?style=for-the-badge&labelColor=2e7d32)](https://albecabrera.github.io/Informatik_interaktiv/)
+[![⚙️ Admin Panel](https://img.shields.io/badge/⚙️_ADMIN_PANEL-2196F3?style=for-the-badge&labelColor=1565c0)](https://albecabrera.github.io/Informatik_interaktiv/admin.html)
 
 **Login:** `admin` / `admin123`
 
 </div>
+
+---
+
+## 📖 Über die Plattform
+
+Eine interaktive Lernplattform für den Informatikunterricht mit HTML, CSS und Python.
 
 ---
 

@@ -1,12 +1,14 @@
 # Interaktive Caesar-Scheibe
 
+🌐 **Live Demo:** [albecabrera.github.io/caesar_spiel](https://albecabrera.github.io/caesar_spiel/)
+
 Schnellzugang zur App:
 
-- Direkt starten: [index.html](./index.html)
-- GitHub-Link: <https://github.com/albecabrera/laprobreza_infantil/blob/main/repos/caesar_spiel/index.html>
+- Live starten: [albecabrera.github.io/caesar_spiel](https://albecabrera.github.io/caesar_spiel/)
+- GitHub-Repo: [github.com/albecabrera/caesar_spiel](https://github.com/albecabrera/caesar_spiel)
 
 ## QR-Code
 
-Scanne den QR-Code, um die Caesar-Scheibe direkt auf GitHub zu öffnen:
+Scanne den QR-Code, um die Caesar-Scheibe direkt zu öffnen:
 
-![QR-Code zur Caesar-Scheibe](https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=https%3A%2F%2Fgithub.com%2Falbecabrera%2Flaprobreza_infantil%2Fblob%2Fmain%2Frepos%2Fcaesar_spiel%2Findex.html)
+![QR-Code zur Caesar-Scheibe](https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=https%3A%2F%2Falbecabrera.github.io%2Fcaesar_spiel%2F)

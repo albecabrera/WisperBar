@@ -5,55 +5,146 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Interaktive Caesar-Scheibe</title>
     <style>
-      :root { color-scheme: dark; font-family: system-ui, sans-serif; }
-      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0f172a; color: #e2e8f0; }
-      .app { width: min(920px, 95vw); padding: 1.2rem; background: #111827; border-radius: 16px; box-shadow: 0 10px 30px #0007; }
-      h1 { margin-top: 0; font-size: 1.5rem; }
-      .layout { display: grid; grid-template-columns: 320px 1fr; gap: 1rem; }
+      :root {
+        color-scheme: dark;
+        font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background:
+          linear-gradient(180deg, #020617cc, #020617f0),
+          url("https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Gaius_Julius_Caesar_%28Vatican_Museum%29.jpg/1280px-Gaius_Julius_Caesar_%28Vatican_Museum%29.jpg")
+            center/cover no-repeat fixed;
+        color: #e2e8f0;
+      }
+      .app {
+        width: min(980px, 94vw);
+        padding: 1.5rem;
+        border: 1px solid #ffffff30;
+        border-radius: 28px;
+        background: linear-gradient(180deg, #ffffff1f, #ffffff12);
+        backdrop-filter: blur(18px) saturate(145%);
+        box-shadow: 0 20px 45px #0008, inset 0 1px 0 #ffffff2f;
+      }
+      h1 { margin: 0 0 .35rem; font-size: 1.6rem; letter-spacing: .02em; }
+      .subtitle { margin: 0 0 1rem; color: #cbd5e1; font-size: .95rem; }
+      .layout { display: grid; grid-template-columns: 340px 1fr; gap: 1rem; align-items: start; }
       .wheel-wrap { display: grid; place-items: center; }
       .ring { position: relative; border-radius: 50%; display: grid; place-items: center; user-select: none; }
-      .outer { width: 280px; height: 280px; border: 12px solid #334155; background: radial-gradient(circle, #1e293b 60%, #0b1220 100%); }
-      .inner { width: 190px; height: 190px; border: 10px solid #64748b; background: radial-gradient(circle, #0f172a 58%, #020617 100%); transform: rotate(0deg); transition: transform .2s ease; }
-      .letter { position: absolute; left: 50%; top: 50%; transform-origin: 0 0; font-weight: 700; font-size: .9rem; }
-      .controls { display: grid; gap: .8rem; }
-      label { font-size: .9rem; color: #cbd5e1; display: grid; gap: .35rem; }
-      input[type="text"], textarea, select, button, input[type="range"] {
-        width: 100%; border-radius: 10px; border: 1px solid #334155; background: #0b1220; color: #e2e8f0; padding: .6rem .7rem;
+      .outer {
+        width: 300px; height: 300px;
+        border: 12px solid #ffffff2e;
+        background: radial-gradient(circle, #1d2839 58%, #0f172a 100%);
+        box-shadow: inset 0 0 0 2px #ffffff2b, 0 10px 30px #0007;
       }
-      textarea { min-height: 96px; resize: vertical; }
+      .inner {
+        width: 206px; height: 206px;
+        border: 10px solid #dbe6f8;
+        background: radial-gradient(circle, #101b2f 58%, #020617 100%);
+        transform: rotate(0deg);
+        transition: transform .12s linear;
+        box-shadow: inset 0 0 0 2px #ffffff3d;
+      }
+      .hub {
+        position: absolute;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: linear-gradient(180deg, #cbd5e1, #64748b);
+        box-shadow: 0 0 0 2px #0f172a, 0 6px 16px #0008;
+      }
+      .inner.is-dragging {
+        transition: none;
+        cursor: grabbing;
+      }
+      .letter {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform-origin: 0 0;
+        font-weight: 700;
+        font-size: .92rem;
+        text-shadow: 0 1px 2px #000;
+      }
+      .outer-letter { color: #f8fafc; }
+      .inner-letter { color: #fbbf24; }
+      .controls { display: grid; gap: .85rem; }
+      .panel {
+        border: 1px solid #334155;
+        border-radius: 16px;
+        padding: .85rem;
+        background: linear-gradient(180deg, #0b1220db, #0b1220bf);
+        box-shadow: inset 0 1px 0 #ffffff1f;
+      }
+      label { font-size: .9rem; color: #cbd5e1; display: grid; gap: .35rem; }
+      textarea, select, button, input[type="range"] {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid #334155;
+        background: #0b1220;
+        color: #e2e8f0;
+        padding: .6rem .7rem;
+      }
+      textarea { min-height: 110px; resize: vertical; }
       .row { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
-      .out { background: #0b1220; border: 1px solid #334155; border-radius: 10px; padding: .8rem; min-height: 84px; white-space: pre-wrap; }
-      button { cursor: pointer; font-weight: 700; background: #1d4ed8; border-color: #1d4ed8; }
-      @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } }
+      .out {
+        background: #020617;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: .85rem;
+        min-height: 88px;
+        white-space: pre-wrap;
+      }
+      button {
+        cursor: pointer;
+        font-weight: 700;
+        border-color: #60a5fa;
+        background: linear-gradient(180deg, #60a5fa, #2563eb);
+      }
+      #outerRing {
+        cursor: grab;
+      }
+      @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
     </style>
   </head>
   <body>
     <main class="app">
       <h1>Interaktive Caesar-Scheibe</h1>
+      <p class="subtitle">Professionelle Verschlüsselungsvorschau mit klar lesbarer Rotationsscheibe.</p>
       <div class="layout">
         <section class="wheel-wrap">
           <div class="ring outer" id="outerRing">
             <div class="ring inner" id="innerRing"></div>
+            <div class="hub" aria-hidden="true"></div>
           </div>
         </section>
         <section class="controls">
-          <div class="row">
-            <label>Modus
-              <select id="mode">
-                <option value="encrypt">Verschlüsseln</option>
-                <option value="decrypt">Entschlüsseln</option>
-              </select>
-            </label>
-            <label>Verschiebung: <span id="shiftLabel">3</span>
-              <input id="shift" type="range" min="0" max="25" value="3" />
-            </label>
+          <div class="panel">
+            <div class="row">
+              <label>Modus
+                <select id="mode">
+                  <option value="encrypt">Verschlüsseln</option>
+                  <option value="decrypt">Entschlüsseln</option>
+                </select>
+              </label>
+              <label>Verschiebung: <span id="shiftLabel">3</span>
+                <input id="shift" type="range" min="0" max="25" value="3" />
+              </label>
+            </div>
           </div>
-          <label>Text
-            <textarea id="inputText" placeholder="Nachricht eingeben..."></textarea>
-          </label>
-          <button id="run">Umwandeln</button>
-          <label>Ergebnis</label>
-          <div class="out" id="result"></div>
+          <div class="panel">
+            <label>Text
+              <textarea id="inputText" placeholder="Nachricht eingeben..."></textarea>
+            </label>
+            <button id="run">Umwandeln</button>
+          </div>
+          <div class="panel">
+            <label>Ergebnis</label>
+            <div class="out" id="result"></div>
+          </div>
         </section>
       </div>
     </main>
@@ -68,25 +159,58 @@
       const inputText = document.getElementById("inputText");
       const result = document.getElementById("result");
       const run = document.getElementById("run");
+      let isDragging = false;
 
-      function placeLetters(target, letters, radius) {
+      function placeLetters(target, letters, radius, className = "") {
         [...letters].forEach((ch, i) => {
           const angle = (360 / letters.length) * i - 90;
           const span = document.createElement("span");
-          span.className = "letter";
+          span.className = `letter ${className}`.trim();
+          span.dataset.baseAngle = String(angle);
+          span.dataset.radius = String(radius);
           span.textContent = ch;
           span.style.transform = `rotate(${angle}deg) translate(${radius}px) rotate(${-angle}deg)`;
           target.appendChild(span);
         });
       }
 
-      placeLetters(outerRing, alphabet, 122);
-      placeLetters(innerRing, alphabet, 78);
+      placeLetters(outerRing, alphabet, 132, "outer-letter");
+      placeLetters(innerRing, alphabet, 86, "inner-letter");
+
+      function keepInnerLettersUpright(shift) {
+        const rotation = shift * (360 / 26);
+        const letters = innerRing.querySelectorAll(".inner-letter");
+        letters.forEach((letter) => {
+          const angle = Number(letter.dataset.baseAngle);
+          const radius = Number(letter.dataset.radius);
+          letter.style.transform = `rotate(${angle}deg) translate(${radius}px) rotate(${-(angle + rotation)}deg)`;
+        });
+      }
 
       function rotateInner() {
         const shift = Number(shiftInput.value);
         innerRing.style.transform = `rotate(${shift * (360 / 26)}deg)`;
+        keepInnerLettersUpright(shift);
         shiftLabel.textContent = String(shift);
+      }
+
+      function normalizedAngleFromPointer(event) {
+        const rect = outerRing.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const angle = Math.atan2(event.clientY - cy, event.clientX - cx) * (180 / Math.PI);
+        return (angle + 450) % 360;
+      }
+
+      function shiftFromAngle(angleDeg) {
+        return ((Math.round(angleDeg / (360 / 26)) % 26) + 26) % 26;
+      }
+
+      function syncShiftFromPointer(event) {
+        const shift = shiftFromAngle(normalizedAngleFromPointer(event));
+        shiftInput.value = String(shift);
+        rotateInner();
+        transform();
       }
 
       function caesar(text, shift, mode) {
@@ -110,6 +234,30 @@
       modeInput.addEventListener("change", transform);
       inputText.addEventListener("input", transform);
       run.addEventListener("click", transform);
+
+      outerRing.addEventListener("pointerdown", (event) => {
+        isDragging = true;
+        outerRing.setPointerCapture(event.pointerId);
+        innerRing.classList.add("is-dragging");
+        syncShiftFromPointer(event);
+      });
+
+      outerRing.addEventListener("pointermove", (event) => {
+        if (!isDragging) return;
+        syncShiftFromPointer(event);
+      });
+
+      outerRing.addEventListener("pointerup", (event) => {
+        isDragging = false;
+        outerRing.releasePointerCapture(event.pointerId);
+        innerRing.classList.remove("is-dragging");
+      });
+
+      outerRing.addEventListener("pointercancel", (event) => {
+        isDragging = false;
+        outerRing.releasePointerCapture(event.pointerId);
+        innerRing.classList.remove("is-dragging");
+      });
 
       rotateInner();
       transform();
