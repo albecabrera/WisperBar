@@ -6,6 +6,9 @@ import { createReadStream, existsSync } from 'fs';
 import { copyFile, unlink, mkdir } from 'fs/promises';
 import { exec } from 'child_process';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const archiver = require('archiver');
 import pool from '../db.js';
 import auth from '../middleware/auth.js';
 
@@ -42,7 +45,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: 300 * 1024 * 1024 },
   fileFilter: (_, file, cb) => {
     if (
       file.mimetype.startsWith('image/') ||
@@ -59,9 +62,53 @@ const upload = multer({
 });
 
 const router = Router();
+
+router.get('/public/:token', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT * FROM files WHERE public_token = ? AND is_public = 1 LIMIT 1',
+      [req.params.token]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Datei nicht gefunden' });
+    const file = rows[0];
+    const filePath = path.join(UPLOADS_DIR, file.stored_name);
+    if (!existsSync(filePath)) return res.status(404).json({ error: 'Datei nicht auf Disk' });
+    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.original_name)}`);
+    res.setHeader('Content-Type', file.mime_type || 'application/octet-stream');
+    createReadStream(filePath).pipe(res);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.use(auth);
 
 // ── View / Preview / Download must come BEFORE /:folder_id ──
+
+router.get('/open/:id', async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT * FROM files WHERE id = ?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Nicht gefunden' });
+    const file = rows[0];
+    const filePath = path.join(UPLOADS_DIR, file.stored_name);
+    if (!existsSync(filePath)) return res.status(404).json({ error: 'Datei nicht auf Disk' });
+
+    const ext = file.original_name.split('.').pop().toLowerCase();
+    const appMap = {
+      pptx: 'Microsoft PowerPoint', ppt: 'Microsoft PowerPoint', odp: 'LibreOffice Impress',
+      doc: 'Microsoft Word', docx: 'Microsoft Word', odc: 'Microsoft Word', odt: 'LibreOffice Writer',
+      pdf: 'Preview',
+    };
+    const appFlag = appMap[ext] ? `-a "${appMap[ext]}"` : '';
+
+    exec(`open ${appFlag} "${filePath}"`, { timeout: 8000 }, (err) => {
+      if (err) return res.status(500).json({ error: 'App nicht gefunden oder konnte nicht geöffnet werden' });
+      res.json({ ok: true });
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 router.get('/preview/:id', async (req, res) => {
   try {
@@ -128,13 +175,243 @@ router.get('/download/:id', async (req, res) => {
   }
 });
 
+router.get('/zip/:folder_id', async (req, res) => {
+  try {
+    const [folders] = await pool.execute('SELECT * FROM folders WHERE id = ?', [req.params.folder_id]);
+    if (!folders.length) return res.status(404).json({ error: 'Ordner nicht gefunden' });
+    const folder = folders[0];
+    const [files] = await pool.execute('SELECT * FROM files WHERE folder_id = ?', [req.params.folder_id]);
+
+    const safeName = folder.name.replace(/[^\w\s-]/g, '').trim() || 'ordner';
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(safeName)}.zip`);
+
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    archive.on('error', (err) => { if (!res.headersSent) res.status(500).end(); else res.end(); console.error(err); });
+    archive.pipe(res);
+    for (const file of files) {
+      const fp = path.join(UPLOADS_DIR, file.stored_name);
+      if (existsSync(fp)) archive.file(fp, { name: file.original_name });
+    }
+    await archive.finalize();
+  } catch (e) {
+    if (!res.headersSent) res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/zip-selected', async (req, res) => {
+  try {
+    const ids = String(req.query.ids || '')
+      .split(',')
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isInteger(n) && n > 0)
+      .slice(0, 200);
+    if (!ids.length) return res.status(400).json({ error: 'Keine Dateien ausgewählt' });
+
+    const placeholders = ids.map(() => '?').join(',');
+    const [files] = await pool.execute(
+      `SELECT * FROM files WHERE id IN (${placeholders}) ORDER BY uploaded_at DESC`,
+      ids
+    );
+    if (!files.length) return res.status(404).json({ error: 'Keine Dateien gefunden' });
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent('selected-files.zip')}`);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.on('error', (e) => { throw e; });
+    archive.pipe(res);
+    for (const file of files) {
+      const fp = path.join(UPLOADS_DIR, file.stored_name);
+      if (existsSync(fp)) archive.file(fp, { name: file.original_name });
+    }
+    await archive.finalize();
+  } catch (e) {
+    if (!res.headersSent) res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/search', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.json({
+    files: [], folders: [], links: [],
+    hasMoreFiles: false, hasMoreFolders: false, hasMoreLinks: false,
+    totalFiles: 0, totalFolders: 0, totalLinks: 0,
+  });
+  const fileOffset = Math.max(0, Number(req.query.fileOffset) || 0);
+  const folderOffset = Math.max(0, Number(req.query.folderOffset) || 0);
+  const linkOffset = Math.max(0, Number(req.query.linkOffset) || 0);
+  const FILE_LIMIT = 25;
+  const FOLDER_LIMIT = 15;
+  const LINK_LIMIT = 25;
+  const norm = q
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const tokens = norm.split(' ').filter(Boolean).slice(0, 6);
+  const normalizedSql = (field) => `
+    REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+      LOWER(${field}),
+      'á','a'),'à','a'),'ä','a'),'â','a'),
+      'é','e'),'è','e'),'ë','e'),'ê','e'),
+      'í','i'),'ì','i')
+  `;
+  const normalizedSql2 = (field) => `
+    REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+      ${normalizedSql(field)},
+      'ï','i'),'î','i'),
+      'ó','o'),'ò','o'),'ö','o'),'ô','o'),
+      'ú','u'),'ù','u'),'ü','u')
+  `;
+  const normalizedSql3 = (field) => `
+    REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+      ${normalizedSql2(field)},
+      'û','u'),'ñ','n'),
+      '.', ''), ',', ''), '-', ''), '_', '')
+  `;
+  const buildTokenWhere = (fields) => tokens.map(() =>
+    `(${fields.map((f) => `${normalizedSql3(f)} LIKE ?`).join(' OR ')})`
+  ).join(' AND ');
+  const fileFields = ['fi.original_name', 'fo.name', 'fo.group_name', 'fo.subject'];
+  const folderFields = ['name', 'group_name', 'subject', 'notes'];
+  const linkFields = ['li.title', 'li.url', 'fo.name', 'fo.group_name', 'fo.subject'];
+  const fileWhere = tokens.length ? buildTokenWhere(fileFields) : `${normalizedSql3('fi.original_name')} LIKE ?`;
+  const folderWhere = tokens.length ? buildTokenWhere(folderFields) : `(${normalizedSql3('name')} LIKE ? OR ${normalizedSql3('notes')} LIKE ?)`;
+  const linkWhere = tokens.length ? buildTokenWhere(linkFields) : `(${normalizedSql3('li.title')} LIKE ? OR ${normalizedSql3('li.url')} LIKE ?)`;
+  const fileParams = tokens.length
+    ? tokens.flatMap((t) => fileFields.map(() => `%${t}%`))
+    : [`%${norm}%`];
+  const folderParams = tokens.length
+    ? tokens.flatMap((t) => folderFields.map(() => `%${t}%`))
+    : [`%${norm}%`, `%${norm}%`];
+  const linkParams = tokens.length
+    ? tokens.flatMap((t) => linkFields.map(() => `%${t}%`))
+    : [`%${norm}%`, `%${norm}%`];
+  try {
+    const [[files], [folders], [links], [[{ totalFiles }]], [[{ totalFolders }]], [[{ totalLinks }]]] = await Promise.all([
+      pool.execute(`
+        SELECT fi.id, fi.original_name AS name, fi.mime_type, fi.size_bytes, fi.uploaded_at,
+               fo.id AS folder_id, fo.name AS folder_name, fo.subject, fo.group_name
+        FROM files fi
+        JOIN folders fo ON fo.id = fi.folder_id
+        WHERE ${fileWhere}
+        ORDER BY fi.uploaded_at DESC
+        LIMIT ? OFFSET ?
+      `, [...fileParams, FILE_LIMIT + 1, fileOffset]),
+      pool.execute(`
+        SELECT
+          id, name, subject, group_name, is_favorite,
+          CASE WHEN ${normalizedSql3('notes')} LIKE ? THEN 1 ELSE 0 END AS notes_match
+        FROM folders
+        WHERE ${folderWhere}
+        ORDER BY notes_match DESC, name
+        LIMIT ? OFFSET ?
+      `, [`%${norm}%`, ...folderParams, FOLDER_LIMIT + 1, folderOffset]),
+      pool.execute(`
+        SELECT li.id, li.title, li.url, li.created_at,
+               fo.id AS folder_id, fo.name AS folder_name, fo.subject, fo.group_name
+        FROM links li
+        JOIN folders fo ON fo.id = li.folder_id
+        WHERE ${linkWhere}
+        ORDER BY li.created_at DESC
+        LIMIT ? OFFSET ?
+      `, [...linkParams, LINK_LIMIT + 1, linkOffset]),
+      pool.execute(`SELECT COUNT(*) AS totalFiles FROM files fi JOIN folders fo ON fo.id = fi.folder_id WHERE ${fileWhere}`, fileParams),
+      pool.execute(`SELECT COUNT(*) AS totalFolders FROM folders WHERE ${folderWhere}`, folderParams),
+      pool.execute(`SELECT COUNT(*) AS totalLinks FROM links li JOIN folders fo ON fo.id = li.folder_id WHERE ${linkWhere}`, linkParams),
+    ]);
+    const hasMoreFiles = files.length > FILE_LIMIT;
+    const hasMoreFolders = folders.length > FOLDER_LIMIT;
+    const hasMoreLinks = links.length > LINK_LIMIT;
+    res.json({
+      files: files.slice(0, FILE_LIMIT),
+      folders: folders.slice(0, FOLDER_LIMIT),
+      links: links.slice(0, LINK_LIMIT),
+      hasMoreFiles,
+      hasMoreFolders,
+      hasMoreLinks,
+      totalFiles: Number(totalFiles),
+      totalFolders: Number(totalFolders),
+      totalLinks: Number(totalLinks),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get('/:folder_id', async (req, res) => {
   try {
-    const [rows] = await pool.execute(
-      'SELECT * FROM files WHERE folder_id = ? ORDER BY uploaded_at DESC',
-      [req.params.folder_id]
-    );
+    const isStudent = req.user?.role === 'student';
+    const query = isStudent
+      ? 'SELECT * FROM files WHERE folder_id = ? AND is_shared = 1 ORDER BY uploaded_at DESC'
+      : 'SELECT * FROM files WHERE folder_id = ? ORDER BY uploaded_at DESC';
+    const [rows] = await pool.execute(query, [req.params.folder_id]);
+
+    const parseLeadingNumber = (name = '') => {
+      const m = String(name).trim().match(/^(\d+)[.)\-\s]?/);
+      return m ? Number(m[1]) : null;
+    };
+
+    rows.sort((a, b) => {
+      const na = parseLeadingNumber(a.original_name);
+      const nb = parseLeadingNumber(b.original_name);
+
+      if (na !== null && nb !== null && na !== nb) return na - nb;
+      if (na !== null && nb === null) return -1;
+      if (na === null && nb !== null) return 1;
+      return String(a.original_name || '').localeCompare(String(b.original_name || ''), 'es', {
+        numeric: true,
+        sensitivity: 'base',
+      });
+    });
+
     res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.put('/:id/share', async (req, res) => {
+  try {
+    await pool.execute(
+      'UPDATE files SET is_shared = IF(is_shared=1, 0, 1) WHERE id = ?',
+      [req.params.id]
+    );
+    const [rows] = await pool.execute('SELECT * FROM files WHERE id = ?', [req.params.id]);
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.put('/:id/public', async (req, res) => {
+  if (req.user?.role !== 'lehrer') return res.status(403).json({ error: 'Nicht erlaubt' });
+  try {
+    const [rows] = await pool.execute('SELECT * FROM files WHERE id = ?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Datei nicht gefunden' });
+    const current = rows[0];
+    const nextPublic = current.is_public ? 0 : 1;
+    const token = current.public_token || randomUUID().replace(/-/g, '');
+    await pool.execute(
+      'UPDATE files SET is_public = ?, public_token = ? WHERE id = ?',
+      [nextPublic, token, req.params.id]
+    );
+    const [updatedRows] = await pool.execute('SELECT * FROM files WHERE id = ?', [req.params.id]);
+    res.json(updatedRows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.put('/:id/deadline', async (req, res) => {
+  if (req.user?.role !== 'lehrer') return res.status(403).json({ error: 'Nicht erlaubt' });
+  const { due_at } = req.body;
+  try {
+    await pool.execute('UPDATE files SET due_at = ? WHERE id = ?', [due_at || null, req.params.id]);
+    const [rows] = await pool.execute('SELECT * FROM files WHERE id = ?', [req.params.id]);
+    res.json(rows[0]);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -157,15 +434,39 @@ router.post('/upload', upload.single('file'), async (req, res) => {
   }
 });
 
+router.put('/:id', async (req, res) => {
+  const { original_name, folder_id } = req.body;
+  const hasName = typeof original_name === 'string' && original_name.trim();
+  const hasFolder = Number.isInteger(Number(folder_id)) && Number(folder_id) > 0;
+  if (!hasName && !hasFolder) {
+    return res.status(400).json({ error: 'original_name oder folder_id erforderlich' });
+  }
+  try {
+    if (hasName) {
+      await pool.execute('UPDATE files SET original_name = ? WHERE id = ?', [original_name.trim(), req.params.id]);
+    }
+    if (hasFolder) {
+      const [target] = await pool.execute('SELECT id FROM folders WHERE id = ? LIMIT 1', [Number(folder_id)]);
+      if (!target.length) return res.status(404).json({ error: 'Zielordner nicht gefunden' });
+      await pool.execute('UPDATE files SET folder_id = ? WHERE id = ?', [Number(folder_id), req.params.id]);
+    }
+    const [rows] = await pool.execute('SELECT * FROM files WHERE id = ?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Datei nicht gefunden' });
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT stored_name FROM files WHERE id = ?', [req.params.id]);
     if (rows.length) {
-      const filePath = path.join(UPLOADS_DIR, rows[0].stored_name);
-      if (existsSync(filePath)) {
-        const { unlink } = await import('fs/promises');
-        await unlink(filePath);
-      }
+      const { stored_name } = rows[0];
+      const filePath = path.join(UPLOADS_DIR, stored_name);
+      const pdfPath = path.join(PREVIEWS_DIR, `${stored_name}.pdf`);
+      if (existsSync(filePath)) await unlink(filePath).catch(() => {});
+      if (existsSync(pdfPath)) await unlink(pdfPath).catch(() => {});
     }
     await pool.execute('DELETE FROM files WHERE id = ?', [req.params.id]);
     res.json({ ok: true });
@@ -178,7 +479,7 @@ router.delete('/:id', async (req, res) => {
 router.use((err, req, res, _next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(413).json({ error: 'Datei zu groß — max. 50 MB' });
+      return res.status(413).json({ error: 'Datei zu groß — max. 300 MB' });
     }
     return res.status(400).json({ error: err.message });
   }

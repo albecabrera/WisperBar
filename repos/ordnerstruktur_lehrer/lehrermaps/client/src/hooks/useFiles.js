@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getFiles, uploadFile, deleteFile } from '../lib/api';
+import { getFiles, uploadFile, deleteFile, renameFile, moveFile, toggleFileShare, setFileDeadline, toggleFilePublic } from '../lib/api';
 
 export function useFiles(folderId) {
   const [files, setFiles] = useState([]);
@@ -21,8 +21,8 @@ export function useFiles(folderId) {
 
   useEffect(() => { load(); }, [load]);
 
-  const upload = useCallback(async (file, onProgress) => {
-    const newFile = await uploadFile(folderId, file, onProgress);
+  const upload = useCallback(async (file, onProgress, signal) => {
+    const newFile = await uploadFile(folderId, file, onProgress, signal);
     setFiles((prev) => [newFile, ...prev]);
     return newFile;
   }, [folderId]);
@@ -32,5 +32,35 @@ export function useFiles(folderId) {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   }, []);
 
-  return { files, loading, error, reload: load, upload, remove };
+  const rename = useCallback(async (id, name) => {
+    const updated = await renameFile(id, name);
+    setFiles((prev) => prev.map((f) => (f.id === id ? updated : f)));
+    return updated;
+  }, []);
+
+  const move = useCallback(async (id, targetFolderId) => {
+    const updated = await moveFile(id, targetFolderId);
+    setFiles((prev) => prev.filter((f) => f.id !== id));
+    return updated;
+  }, []);
+
+  const toggleShare = useCallback(async (id) => {
+    const updated = await toggleFileShare(id);
+    setFiles((prev) => prev.map((f) => (f.id === id ? updated : f)));
+    return updated;
+  }, []);
+
+  const setDeadline = useCallback(async (id, due_at) => {
+    const updated = await setFileDeadline(id, due_at);
+    setFiles((prev) => prev.map((f) => (f.id === id ? updated : f)));
+    return updated;
+  }, []);
+
+  const togglePublic = useCallback(async (id) => {
+    const updated = await toggleFilePublic(id);
+    setFiles((prev) => prev.map((f) => (f.id === id ? updated : f)));
+    return updated;
+  }, []);
+
+  return { files, loading, error, reload: load, upload, remove, rename, move, toggleShare, setDeadline, togglePublic };
 }
