@@ -22,6 +22,9 @@ api.interceptors.response.use(
 export const login = (password) =>
   api.post('/login', { password }).then((r) => r.data.token);
 
+export const loginStudent = (password) =>
+  api.post('/login-student', { password }).then((r) => r.data.token);
+
 export const getFolders = () =>
   api.get('/folders').then((r) => r.data);
 
@@ -93,9 +96,6 @@ export const setFileDeadline = (id, due_at) =>
   api.put(`/files/${id}/deadline`, { due_at }).then((r) => r.data);
 export const publicFileUrl = (token) =>
   `${window.location.origin}/api/files/public/${encodeURIComponent(token)}`;
-
-export const loginStudent = (password) =>
-  api.post('/login-student', { password }).then((r) => r.data.token);
 
 export const generateLessonDraft = (payload) =>
   api.post('/ai/lesson-draft', payload).then((r) => r.data);
