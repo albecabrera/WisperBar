@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 WisperBar – lokale Spracheingabe als macOS Menüleisten-App
-Shortcut: mantener ⌥ derecho  (braucht Eingabeüberwachung in Systemeinstellungen)
+PTT-Shortcut: Right Option (⌥) halten → aufnehmen, loslassen → transkribieren
 """
 
 import fcntl
@@ -17,15 +17,24 @@ import rumps
 import mlx_whisper
 from pynput import keyboard as kb
 
+import objc
+from AppKit import (
+    NSPanel, NSView, NSWindowStyleMaskBorderless,
+    NSBackingStoreBuffered, NSScreen, NSColor, NSBezierPath,
+    NSWindowCollectionBehaviorCanJoinAllSpaces,
+    NSFloatingWindowLevel,
+)
+
 SAMPLE_RATE = 16_000
 MODEL_REPO  = "mlx-community/whisper-large-v3-mlx"
 LOCK_PATH   = "/tmp/wisperbar.lock"
 BARS        = " ▁▂▃▄▅▆▇█"
+BAR_COUNT   = 28
 LANGUAGES   = [
     ("🌐", "Auto-detect", "auto"),
-    ("🇩🇪", "Deutsch", "de"),
-    ("🇺🇸", "English", "en"),
-    ("🇪🇸", "Español", "es"),
+    ("🇩🇪", "Deutsch",    "de"),
+    ("🇺🇸", "English",    "en"),
+    ("🇪🇸", "Español",    "es"),
 ]
 
 _lock_fd = None
@@ -41,6 +50,117 @@ def _acquire_lock():
         sys.exit(0)
 
 
+# ── Overlay ───────────────────────────────────────────────────────────────────
+
+class WaveformView(NSView):
+
+    def initWithFrame_(self, frame):
+        self = objc.super(WaveformView, self).initWithFrame_(frame)
+        if self is not None:
+            self._current = [0.0] * BAR_COUNT
+            self._targets  = [0.0] * BAR_COUNT
+            self._idle_t   = 0.0
+        return self
+
+    @objc.python_method
+    def tick(self, levels_deque):
+        src   = list(levels_deque) if levels_deque else [0.0]
+        peak  = max(src) or 1e-6
+        norm  = [v / peak * 0.95 for v in src]
+        ratio = len(norm) / BAR_COUNT
+        self._targets = [
+            norm[min(int(i * ratio), len(norm) - 1)]
+            for i in range(BAR_COUNT)
+        ]
+        self._idle_t += 0.05
+        for i in range(BAR_COUNT):
+            self._current[i] += (self._targets[i] - self._current[i]) * 0.35
+        self.setNeedsDisplay_(True)
+
+    def drawRect_(self, dirty):
+        w = self.bounds().size.width
+        h = self.bounds().size.height
+
+        NSColor.clearColor().setFill()
+        NSBezierPath.fillRect_(self.bounds())
+
+        # Pill background with subtle border glow
+        NSColor.colorWithRed_green_blue_alpha_(0.12, 0.75, 0.60, 0.18).setFill()
+        NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
+            ((-1.0, -1.0), (w + 2, h + 2)), (h + 2) / 2, (h + 2) / 2
+        ).fill()
+
+        NSColor.colorWithRed_green_blue_alpha_(0.07, 0.08, 0.10, 0.95).setFill()
+        NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
+            ((0.0, 0.0), (w, h)), h / 2, h / 2
+        ).fill()
+
+        # Bars
+        pad_x  = 40.0
+        bar_w  = 4.0
+        area_w = w - pad_x * 2
+        gap    = (area_w - BAR_COUNT * bar_w) / max(BAR_COUNT - 1, 1)
+
+        for i, lvl in enumerate(self._current):
+            idle   = 0.10 + 0.06 * np.sin(self._idle_t * 3.8 + i * 0.45)
+            height = max(idle * h, lvl * h * 0.72)
+            x      = pad_x + i * (bar_w + gap)
+            y      = (h - height) / 2.0
+
+            t      = i / BAR_COUNT
+            bright = 0.50 + lvl * 0.50
+            rc     = 0.04 * bright
+            gc     = (0.80 + t * 0.15) * bright
+            bc     = (0.88 - t * 0.30) * bright
+            alpha  = 0.70 + lvl * 0.30
+
+            NSColor.colorWithRed_green_blue_alpha_(rc, gc, bc, alpha).setFill()
+            NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
+                ((x, y), (bar_w, height)), bar_w / 2.0, bar_w / 2.0
+            ).fill()
+
+    def isOpaque(self):
+        return False
+
+
+class WaveformOverlay:
+
+    def __init__(self):
+        screen = NSScreen.mainScreen().frame()
+        sw     = screen.size.width
+        ow, oh = 460, 68
+        ox     = (sw - ow) / 2.0
+        oy     = 80.0
+
+        self._win = NSPanel.alloc().initWithContentRect_styleMask_backing_defer_(
+            ((ox, oy), (ow, oh)),
+            NSWindowStyleMaskBorderless,
+            NSBackingStoreBuffered,
+            False,
+        )
+        self._win.setLevel_(NSFloatingWindowLevel + 2)
+        self._win.setOpaque_(False)
+        self._win.setBackgroundColor_(NSColor.clearColor())
+        self._win.setCollectionBehavior_(NSWindowCollectionBehaviorCanJoinAllSpaces)
+        self._win.setHasShadow_(True)
+        self._win.setIgnoresMouseEvents_(True)
+        self._win.setReleasedWhenClosed_(False)
+
+        self._view = WaveformView.alloc().initWithFrame_(((0.0, 0.0), (ow, oh)))
+        self._win.setContentView_(self._view)
+
+    def show(self):
+        self._win.orderFront_(None)
+
+    def hide(self):
+        self._win.orderOut_(None)
+
+    def update(self, levels):
+        self._view.tick(levels)
+
+
+# ── App ───────────────────────────────────────────────────────────────────────
+
 class WisperBar(rumps.App):
 
     def __init__(self):
@@ -50,10 +170,10 @@ class WisperBar(rumps.App):
         self.frames     = []
         self.transcript = ""
         self.lang_code  = "auto"
-        self._held      = set()
         self.model      = None
         self._levels    = deque([0.0] * 5, maxlen=5)
         self._fn_held   = False
+        self._overlay   = WaveformOverlay()
 
         self._build_menu()
         threading.Thread(target=self._load_model, daemon=True).start()
@@ -68,7 +188,7 @@ class WisperBar(rumps.App):
         except Exception:
             self._listener = None
 
-    # ── Menü ─────────────────────────────────────────────────────────────────
+    # ── Menü ──────────────────────────────────────────────────────────────────
 
     def _build_menu(self):
         self.btn_record = rumps.MenuItem("⏺  Aufnehmen", callback=self.toggle)
@@ -98,6 +218,13 @@ class WisperBar(rumps.App):
             rumps.MenuItem("Beenden", callback=lambda _: rumps.quit_application()),
         ]
         self._refresh_actions()
+
+    # ── Overlay-Timer ─────────────────────────────────────────────────────────
+
+    @rumps.timer(0.05)
+    def _overlay_tick(self, _):
+        if self.recording:
+            self._overlay.update(self._levels)
 
     # ── Modell laden ──────────────────────────────────────────────────────────
 
@@ -130,6 +257,7 @@ class WisperBar(rumps.App):
         self.btn_record.title = "⏹  Stopp"
         self.lbl_status.title = "●  Aufnahme läuft…"
         self._refresh_actions()
+        self._overlay.show()
         threading.Thread(target=self._record_loop, daemon=True).start()
 
     def _record_loop(self):
@@ -148,16 +276,16 @@ class WisperBar(rumps.App):
 
     def _waveform(self):
         peak = max(self._levels) or 1e-6
-        bars = "".join(
+        return "".join(
             BARS[min(int(v / peak * 8 + 0.5), 8)] for v in self._levels
         )
-        return bars
 
     def _stop(self):
         self.recording        = False
         self.title            = "⏳"
         self.btn_record.title = "⏺  Aufnehmen"
         self.lbl_status.title = "⏳  Transkription läuft…"
+        self._overlay.hide()
         threading.Thread(target=self._transcribe, daemon=True).start()
 
     # ── Transkription ─────────────────────────────────────────────────────────
@@ -168,13 +296,11 @@ class WisperBar(rumps.App):
             self.lbl_status.title = "✅  Bereit  –  mantener ⌥ derecho"
             return
 
-        audio = np.concatenate(self.frames).flatten()
+        audio    = np.concatenate(self.frames).flatten()
         lang     = None if self.lang_code == "auto" else self.lang_code
         result   = mlx_whisper.transcribe(
-            audio,
-            path_or_hf_repo=MODEL_REPO,
-            language=lang,
-            task="transcribe",
+            audio, path_or_hf_repo=MODEL_REPO,
+            language=lang, task="transcribe",
         )
         detected = result.get("language", "")
         text     = result["text"].strip()
@@ -229,7 +355,7 @@ class WisperBar(rumps.App):
         for item in self.lang_items:
             item.state = (item._lang_code == self.lang_code)
 
-    # ── mantener ⌥ derecho Erkennung ──────────────────────────────────────────────────
+    # ── Right Option PTT ──────────────────────────────────────────────────────
 
     def _key_press(self, key):
         if key == kb.Key.alt_r and not self._fn_held:
