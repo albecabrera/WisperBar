@@ -1,6 +1,8 @@
 // SpeechRecognizer.swift
 // Kapselt die gesamte Sprach- und Audio-Logik.
 // NSObject-Subklasse wegen SFSpeechRecognizerDelegate (erfordert NSObjectProtocol).
+//
+// Einsprachig (Spanisch, es-ES) für schnelle Echtzeit-Erkennung mit Teilergebnissen.
 import Foundation
 import Speech
 import AVFoundation
@@ -17,35 +19,12 @@ enum RecordingState: Equatable {
     var isRecording: Bool { self == .recording }
 }
 
-// MARK: – Sprachauswahl
-
-enum DictationLanguage: String, CaseIterable, Identifiable {
-    case german  = "de-DE"
-    case english = "en-US"
-    case spanish = "es-ES"
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .german:  return "Deutsch"
-        case .english: return "English"
-        case .spanish: return "Español"
-        }
-    }
-
-    var flag: String {
-        switch self {
-        case .german:  return "🇩🇪"
-        case .english: return "🇺🇸"
-        case .spanish: return "🇪🇸"
-        }
-    }
-}
-
 // MARK: – SpeechRecognizer
 
 final class SpeechRecognizer: NSObject, ObservableObject {
+
+    /// Feste Erkennungssprache: Spanisch.
+    private static let locale = Locale(identifier: "es-ES")
 
     // MARK: Veröffentlichte Zustände (immer auf Main-Thread schreiben)
 
@@ -53,9 +32,6 @@ final class SpeechRecognizer: NSObject, ObservableObject {
     @Published private(set) var transcript: String = ""
     @Published private(set) var interimTranscript: String = ""
     @Published private(set) var audioLevels: [Float] = Array(repeating: 0, count: 32)
-    @Published var selectedLanguage: DictationLanguage = .german {
-        didSet { rebuildRecognizer() }
-    }
 
     // MARK: Private Eigenschaften
 
@@ -68,11 +44,19 @@ final class SpeechRecognizer: NSObject, ObservableObject {
     /// Flag: Session wurde absichtlich beendet → Callbacks ignorieren
     private var isSessionActive = false
 
+    /// Laufende-Nummer der Erkennungs-Task. Verhindert, dass verspätete Callbacks
+    /// einer abgebrochenen Task denselben Text doppelt anhängen.
+    private var sessionID = 0
+
+    /// Wahltaste wurde losgelassen, während noch Berechtigungen liefen → sofort stoppen.
+    private var pendingStop = false
+
     // MARK: – Init
 
     override init() {
         super.init()
-        rebuildRecognizer()
+        sfRecognizer = SFSpeechRecognizer(locale: SpeechRecognizer.locale)
+        sfRecognizer?.delegate = self
     }
 
     // MARK: – Öffentliche API
@@ -88,6 +72,10 @@ final class SpeechRecognizer: NSObject, ObservableObject {
 
     func startRecording() {
         guard recordingState == .idle else { return }
+        // Jede Diktatsitzung beginnt frisch – vorherigen Text verwerfen.
+        transcript = ""
+        interimTranscript = ""
+        pendingStop = false
         recordingState = .requestingPermission
 
         requestPermissions { [weak self] granted in
@@ -105,8 +93,13 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         }
     }
 
-    /// Aufnahme stoppen, Text in Zwischenablage sichern und automatisch einfügen.
+    /// Aufnahme stoppen, Text sichern und automatisch einfügen.
     func stopRecording() {
+        // Taste schon losgelassen, bevor die Aufnahme wirklich lief → später stoppen.
+        if recordingState == .requestingPermission {
+            pendingStop = true
+            return
+        }
         guard recordingState.isRecording else { return }
         NotificationCenter.default.post(name: .wbRecordingStopped, object: nil)
 
@@ -126,7 +119,8 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         if !transcript.isEmpty {
             copyToClipboard()
             NotificationCenter.default.post(name: .wbClosePopover, object: nil)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            // PTT hält den Fokus im Zielfenster → kein langes Warten nötig.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 self.simulatePaste()
             }
         }
@@ -153,16 +147,6 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         }
     }
 
-    // MARK: – Sprachmodell neu aufbauen
-
-    private func rebuildRecognizer() {
-        let wasRecording = recordingState.isRecording
-        if wasRecording { stopRecording() }
-        sfRecognizer = SFSpeechRecognizer(locale: Locale(identifier: selectedLanguage.rawValue))
-        sfRecognizer?.delegate = self
-        if wasRecording { startRecording() }
-    }
-
     // MARK: – Berechtigungen
 
     private func requestPermissions(completion: @escaping (Bool) -> Void) {
@@ -185,18 +169,23 @@ final class SpeechRecognizer: NSObject, ObservableObject {
 
         if #available(macOS 13, *) {
             // On-Device bevorzugen: läuft komplett lokal, kein Internet, keine Kosten.
-            // Falls die Sprache kein lokales Modell hat, fällt Apple automatisch zurück.
             request.requiresOnDeviceRecognition = sfRecognizer?.supportsOnDeviceRecognition == true
+            // Automatische Satzzeichen (Punkt, Komma, Fragezeichen …).
+            request.addsPunctuation = true
         }
 
         recognitionRequest = request
         isSessionActive = true
 
+        // Eindeutige ID dieser Task – verspätete Callbacks älterer Tasks ignorieren.
+        sessionID += 1
+        let mySessionID = sessionID
+
         recognitionTask = sfRecognizer?.recognitionTask(with: request) { [weak self] result, error in
             guard let self else { return }
 
             DispatchQueue.main.async {
-                guard self.isSessionActive else { return }
+                guard self.isSessionActive, mySessionID == self.sessionID else { return }
 
                 // ── Ergebnisse verarbeiten ────────────────────────────────────
                 if let result {
@@ -206,8 +195,7 @@ final class SpeechRecognizer: NSObject, ObservableObject {
                             self.transcript += (self.transcript.isEmpty ? "" : " ") + text
                         }
                         self.interimTranscript = ""
-                        // Apple beendet die Task nach jedem finalen Ergebnis (≈60 s Limit).
-                        // Solange der Nutzer noch aufnimmt, direkt neu starten.
+                        // Apple beendet die Task nach jedem finalen Ergebnis (~60s Limit).
                         self.restartSession()
                         return
                     } else {
@@ -217,14 +205,10 @@ final class SpeechRecognizer: NSObject, ObservableObject {
 
                 // ── Fehlerbehandlung ──────────────────────────────────────────
                 if let error = error as NSError? {
-                    // Alle kAFAssistantErrorDomain-Fehler kommen vom Apple-Server –
-                    // für lokale Nutzung irrelevant; Session einfach neu starten.
                     if error.domain == "kAFAssistantErrorDomain" {
                         self.restartSession()
                         return
                     }
-
-                    // Sonstige harmlose System-Codes (Stille, Abbruch, URL-Cancel)
                     let benignCodes: Set<Int> = [203, 209, -999]
                     let isBenign = benignCodes.contains(error.code) ||
                                    error.localizedDescription.lowercased().contains("cancel")
@@ -251,6 +235,11 @@ final class SpeechRecognizer: NSObject, ObservableObject {
                 self.recordingState = .recording
                 self.interimTranscript = ""
                 NotificationCenter.default.post(name: .wbRecordingStarted, object: nil)
+                // Taste wurde während der Berechtigung losgelassen → jetzt stoppen.
+                if self.pendingStop {
+                    self.pendingStop = false
+                    self.stopRecording()
+                }
             }
         } catch {
             DispatchQueue.main.async {
@@ -261,7 +250,6 @@ final class SpeechRecognizer: NSObject, ObservableObject {
     }
 
     /// Startet nur die Erkennungs-Task neu, ohne den Aufnahmezustand zu ändern.
-    /// Wird nach Apple-Timeouts, Server-Fehlern und finalen Ergebnissen aufgerufen.
     private func restartSession() {
         guard isSessionActive else { return }
         audioEngine.stop()
@@ -270,6 +258,8 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         recognitionTask?.cancel()
         recognitionRequest = nil
         recognitionTask   = nil
+        // Alte Task sofort entwerten – verspätete finale Callbacks ignorieren.
+        sessionID += 1
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
             guard let self, self.isSessionActive else { return }
@@ -350,7 +340,6 @@ extension SpeechRecognizer: SFSpeechRecognizerDelegate {
         availabilityDidChange available: Bool
     ) {
         guard !available, recordingState.isRecording else { return }
-        // Erkennung kurz nicht verfügbar (z. B. Netz-Interruption) → neu starten statt Fehler
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self, self.isSessionActive else { return }
             self.restartSession()

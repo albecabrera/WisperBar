@@ -37,23 +37,10 @@ struct PopoverView: View {
 
             Spacer()
 
-            // Sprach-Flags
-            HStack(spacing: 2) {
-                ForEach(DictationLanguage.allCases) { lang in
-                    Button {
-                        sr.selectedLanguage = lang
-                    } label: {
-                        Text(lang.flag)
-                            .font(.system(size: 20))
-                            .padding(4)
-                    }
-                    .buttonStyle(.plain)
-                    .opacity(sr.selectedLanguage == lang ? 1.0 : 0.3)
-                    .scaleEffect(sr.selectedLanguage == lang ? 1.05 : 1.0)
-                    .animation(.spring(response: 0.2), value: sr.selectedLanguage)
-                    .help(lang.displayName)
-                }
-            }
+            // Feste Sprache: Spanisch
+            Text("🇪🇸 Español")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 11)
@@ -269,11 +256,11 @@ struct PopoverView: View {
         case .idle:
             return sr.transcript.isEmpty
                 ? "Bereit – rechte ⌥-Taste halten oder Button drücken"
-                : "Fertig – \(sr.selectedLanguage.flag) \(sr.selectedLanguage.displayName)"
+                : "Fertig – 🇪🇸 Español"
         case .requestingPermission:
             return "Berechtigungen werden angefordert…"
         case .recording:
-            return "Aufnahme läuft (\(sr.selectedLanguage.flag) \(sr.selectedLanguage.displayName))…"
+            return "Aufnahme läuft (🇪🇸 Español)…"
         case .error:
             return "Fehler aufgetreten"
         }
