@@ -51,6 +51,11 @@ final class SpeechRecognizer: NSObject, ObservableObject {
     /// Wahltaste wurde losgelassen, während noch Berechtigungen liefen → sofort stoppen.
     private var pendingStop = false
 
+    /// Verhindert doppeltes Auto-Einfügen pro Diktatsitzung. Wird beim Start
+    /// zurückgesetzt und beim ersten Stopp gesetzt – schützt gegen einen
+    /// zweiten stopRecording()-Aufruf (z. B. doppeltes Tasten-Event).
+    private var didAutoPaste = false
+
     // MARK: – Init
 
     override init() {
@@ -76,6 +81,7 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         transcript = ""
         interimTranscript = ""
         pendingStop = false
+        didAutoPaste = false
         recordingState = .requestingPermission
 
         requestPermissions { [weak self] granted in
@@ -115,8 +121,11 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         endSession()
         recordingState = .idle
 
-        // Text automatisch in Zwischenablage und in aktives Textfeld einfügen
-        if !transcript.isEmpty {
+        // Text automatisch in Zwischenablage und in aktives Textfeld einfügen.
+        // didAutoPaste verhindert doppeltes Einfügen, falls stopRecording() durch
+        // ein doppeltes Tasten-Event ein zweites Mal aufgerufen wird.
+        if !transcript.isEmpty && !didAutoPaste {
+            didAutoPaste = true
             copyToClipboard()
             NotificationCenter.default.post(name: .wbClosePopover, object: nil)
             // PTT hält den Fokus im Zielfenster → kein langes Warten nötig.
