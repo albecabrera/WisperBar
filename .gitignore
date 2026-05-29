@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# Xcode build / derived data
+.build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Generado por xcodegen (fuente real: project.yml)
+WisperBar.xcodeproj/
