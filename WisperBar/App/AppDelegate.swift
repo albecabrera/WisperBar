@@ -1,5 +1,6 @@
 // AppDelegate.swift
 import AppKit
+import ServiceManagement
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -18,11 +19,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        registerLaunchAtLogin()
         setupStatusItem()
         setupPopover()
         setupHotKey()
         setupOverlay()
         registerNotifications()
+    }
+
+    // MARK: – Inicio automático con el sistema
+
+    private func registerLaunchAtLogin() {
+        guard SMAppService.mainApp.status != .enabled else { return }
+        try? SMAppService.mainApp.register()
     }
 
     // MARK: – Status item
