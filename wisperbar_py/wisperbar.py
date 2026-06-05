@@ -41,6 +41,7 @@ from workflows import (
 from config_panel import ConfigPanel
 from i18n import t
 from punctuation import process_punctuation
+from sentence_parser import auto_punctuate_questions
 
 # ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -569,7 +570,7 @@ class WisperBar(rumps.App):
             initial_prompt=prompt,
         )
         detected = result.get("language", "")
-        raw_text = process_punctuation(result["text"].strip())
+        raw_text = auto_punctuate_questions(process_punctuation(result["text"].strip()))
 
         if not raw_text:
             self._stop_spinner()
