@@ -34,6 +34,10 @@ from AppKit import (
 
 from ollama_service import OllamaService, OllamaError
 from vocab import build_initial_prompt
+from workflows import (
+    WORKFLOWS, WORKFLOW_BY_ID,
+    get_system_prompt, get_processing_label, workflow_menu_label,
+)
 
 # ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -60,6 +64,7 @@ CONFIG_DEFAULTS = {
     "ollama_model":   "",
     "ollama_timeout": 60,
     "user_terms":     [],
+    "emoji_density":  "media",
 }
 
 _lock_fd = None
@@ -230,6 +235,7 @@ class WisperBar(rumps.App):
         self.frames         = []
         self.transcript     = ""
         self.lang_code      = self._cfg.get("language", "auto")
+        self._workflow_id   = self._cfg.get("workflow", "transcribir")
         self.model          = None
         self._levels        = deque([0.0] * BAR_COUNT, maxlen=BAR_COUNT)
         self._fn_held       = False
@@ -259,12 +265,12 @@ class WisperBar(rumps.App):
     # ── Menü ──────────────────────────────────────────────────────────────────
 
     def _build_menu(self):
-        self.btn_record  = rumps.MenuItem("⏺  Aufnehmen", callback=self.toggle)
-        self.lbl_status  = rumps.MenuItem("⏳  Modell wird geladen…")
+        self.btn_record  = rumps.MenuItem("⏺  Grabar", callback=self.toggle)
+        self.lbl_status  = rumps.MenuItem("⏳  Cargando modelo…")
         self.lbl_ollama  = rumps.MenuItem("⏳  Ollama: comprobando…")
-        self.btn_copy    = rumps.MenuItem("  Kopieren",  callback=self.copy)
-        self.btn_paste   = rumps.MenuItem("  Einfügen",  callback=self.paste)
-        self.btn_clear   = rumps.MenuItem("  Löschen",   callback=self.clear)
+        self.btn_copy    = rumps.MenuItem("  Copiar",   callback=self.copy)
+        self.btn_paste   = rumps.MenuItem("  Pegar",    callback=self.paste)
+        self.btn_clear   = rumps.MenuItem("  Limpiar",  callback=self.clear)
 
         self.lang_items = []
         for flag, name, code in LANGUAGES:
@@ -272,6 +278,16 @@ class WisperBar(rumps.App):
             item._lang_code = code
             item.state = (code == self.lang_code)
             self.lang_items.append(item)
+
+        self.workflow_items = []
+        for wf in WORKFLOWS:
+            item = rumps.MenuItem(
+                workflow_menu_label(wf, self._ui_lang()),
+                callback=self._set_workflow,
+            )
+            item._workflow_id = wf.id
+            item.state = (wf.id == self._workflow_id)
+            self.workflow_items.append(item)
 
         self.lbl_version = rumps.MenuItem(f"WisperBar v{APP_VERSION}  •  build {APP_BUILD}")
 
@@ -283,15 +299,20 @@ class WisperBar(rumps.App):
             self.lbl_status,
             self.lbl_ollama,
             None,
+            *self.workflow_items,
+            None,
             self.btn_copy,
             self.btn_paste,
             self.btn_clear,
             None,
             *self.lang_items,
             None,
-            rumps.MenuItem("Beenden", callback=lambda _: rumps.quit_application()),
+            rumps.MenuItem("Salir", callback=lambda _: rumps.quit_application()),
         ]
         self._refresh_actions()
+
+    def _ui_lang(self) -> str:
+        return self.lang_code if self.lang_code != "auto" else "es"
 
     # ── Overlay-Timer ─────────────────────────────────────────────────────────
 
@@ -312,7 +333,7 @@ class WisperBar(rumps.App):
 
     def _load_model(self):
         self.model = True
-        self.lbl_status.title = "✅  Bereit  –  mantener ⌥ izquierdo"
+        self.lbl_status.title = "✅  Listo  —  mantener ⌥"
 
     def _check_ollama(self):
         models   = []
@@ -398,35 +419,60 @@ class WisperBar(rumps.App):
     def _transcribe(self):
         if not self.frames:
             self.title = "🎤"
-            self.lbl_status.title = "✅  Bereit  –  mantener ⌥ izquierdo"
+            self.lbl_status.title = "✅  Listo  —  mantener ⌥"
             return
 
-        silence  = np.zeros(SAMPLE_RATE * 3, dtype=np.float32)
-        audio    = np.concatenate([np.concatenate(self.frames).flatten(), silence])
-        lang     = None if self.lang_code == "auto" else self.lang_code
+        silence    = np.zeros(SAMPLE_RATE * 3, dtype=np.float32)
+        audio      = np.concatenate([np.concatenate(self.frames).flatten(), silence])
+        lang       = None if self.lang_code == "auto" else self.lang_code
         user_terms = self._cfg.get("user_terms", [])
-        prompt   = build_initial_prompt(self.lang_code, user_terms) or None
+        prompt     = build_initial_prompt(self.lang_code, user_terms) or None
 
+        # Fase 1: Whisper
+        self._main_q.put(lambda: setattr(self, '_lbl_tmp', None) or
+                         setattr(self.lbl_status, 'title', "⏳  Transcribiendo…"))
         result   = mlx_whisper.transcribe(
             audio, path_or_hf_repo=MODEL_REPO,
             language=lang, task="transcribe",
             initial_prompt=prompt,
         )
         detected = result.get("language", "")
-        text     = result["text"].strip()
+        raw_text = result["text"].strip()
 
-        self.transcript = text
-        self.title = "🎤"
+        if not raw_text:
+            self.title = "🎤"
+            self.lbl_status.title = "✅  Listo  —  mantener ⌥"
+            return
 
-        if text:
-            pyperclip.copy(text)
-            preview  = (text[:45] + "…") if len(text) > 45 else text
-            lang_tag = f" [{detected}]" if detected and self.lang_code == "auto" else ""
-            self.lbl_status.title = f'📝{lang_tag}  "{preview}"'
-            self._paste_to_active_app()
-        else:
-            self.lbl_status.title = "✅  Bereit  –  mantener ⌥ izquierdo"
+        # Fase 2: Ollama (si workflow lo requiere)
+        wf_def = WORKFLOW_BY_ID.get(self._workflow_id)
+        final_text = raw_text
 
+        if wf_def and wf_def.needs_ollama and self._ollama_ok and self._ollama_model:
+            effective_lang  = self.lang_code if self.lang_code != "auto" else (detected or "es")
+            emoji_density   = self._cfg.get("emoji_density", "media")
+            system_prompt   = get_system_prompt(self._workflow_id, effective_lang, emoji_density)
+            proc_label      = get_processing_label(self._workflow_id, effective_lang)
+            self._main_q.put(lambda lbl=proc_label: setattr(self.lbl_status, 'title', lbl))
+            try:
+                final_text = self._ollama.chat(
+                    model=self._ollama_model,
+                    system=system_prompt,
+                    user=raw_text,
+                )
+            except OllamaError as exc:
+                print(f"[WisperBar] Ollama error: {exc}", flush=True)
+                final_text = raw_text
+
+        self.transcript = final_text
+        self.title      = "🎤"
+
+        pyperclip.copy(final_text)
+        preview  = (final_text[:45] + "…") if len(final_text) > 45 else final_text
+        lang_tag = f" [{detected}]" if detected and self.lang_code == "auto" else ""
+        wf_icon  = wf_def.icon if wf_def else "📝"
+        self.lbl_status.title = f'{wf_icon}{lang_tag}  "{preview}"'
+        self._paste_to_active_app()
         self._refresh_actions()
 
     # ── Aktionen ──────────────────────────────────────────────────────────────
@@ -442,7 +488,7 @@ class WisperBar(rumps.App):
 
     def clear(self, _=None):
         self.transcript = ""
-        self.lbl_status.title = "✅  Bereit  –  mantener ⌥ izquierdo"
+        self.lbl_status.title = "✅  Listo  —  mantener ⌥"
         self._refresh_actions()
 
     def _paste_to_active_app(self):
@@ -466,6 +512,13 @@ class WisperBar(rumps.App):
         save_config(self._cfg)
         for item in self.lang_items:
             item.state = (item._lang_code == self.lang_code)
+
+    def _set_workflow(self, sender):
+        self._workflow_id       = sender._workflow_id
+        self._cfg["workflow"]   = self._workflow_id
+        save_config(self._cfg)
+        for item in self.workflow_items:
+            item.state = (item._workflow_id == self._workflow_id)
 
     # ── Right Option PTT ──────────────────────────────────────────────────────
 
