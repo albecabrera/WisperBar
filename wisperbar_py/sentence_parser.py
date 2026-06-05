@@ -186,6 +186,16 @@ def split_sentences(text: str) -> list[Sentence]:
     return result
 
 
+def _capitalize_first(text: str) -> str:
+    """Capitaliza la primera letra real, saltando '¿' si la hay."""
+    if not text:
+        return text
+    i = 1 if text.startswith("¿") else 0
+    if i < len(text) and text[i].islower():
+        return text[:i] + text[i].upper() + text[i + 1:]
+    return text
+
+
 def auto_punctuate_questions(text: str) -> str:
     """
     Corrige la puntuacion de preguntas:
@@ -209,6 +219,8 @@ def auto_punctuate_questions(text: str) -> str:
             # Agregar apertura espanol si aplica
             if s.needs_opening_mark and not t.startswith("¿"):
                 t = "¿" + t
+        # Primera letra siempre mayuscula (preguntas y enunciados)
+        t = _capitalize_first(t)
         out.append(t)
 
     return "  ".join(out) if "\n\n" not in text else "\n\n".join(out)
