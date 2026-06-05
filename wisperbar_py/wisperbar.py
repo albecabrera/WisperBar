@@ -23,7 +23,9 @@ from AppKit import (
     NSPanel, NSView, NSWindowStyleMaskBorderless,
     NSBackingStoreBuffered, NSScreen, NSColor, NSBezierPath,
     NSWindowCollectionBehaviorCanJoinAllSpaces,
-    NSFloatingWindowLevel,
+    NSWindowCollectionBehaviorStationary,
+    NSWindowCollectionBehaviorIgnoresCycle,
+    NSFloatingWindowLevel, NSStatusWindowLevel,
 )
 
 import os
@@ -70,55 +72,57 @@ class WaveformView(NSView):
 
     @objc.python_method
     def tick(self, levels_deque):
-        src = list(levels_deque) if levels_deque else [0.0] * BAR_COUNT
-        # Padding / trim para garantizar BAR_COUNT elementos
-        while len(src) < BAR_COUNT:
-            src.append(0.0)
-        self._targets = src[:BAR_COUNT]
-        self._idle_t += 0.032
-        # Lerp rápido hacia arriba (0.6), lento hacia abajo (0.15) — responde a picos
+        src   = list(levels_deque) if levels_deque else [0.0]
+        peak  = max(src) or 1e-6
+        norm  = [v / peak * 0.95 for v in src]
+        ratio = len(norm) / BAR_COUNT
+        self._targets = [
+            norm[min(int(i * ratio), len(norm) - 1)]
+            for i in range(BAR_COUNT)
+        ]
+        self._idle_t += 0.05
         for i in range(BAR_COUNT):
-            diff = self._targets[i] - self._current[i]
-            alpha = 0.6 if diff > 0 else 0.15
-            self._current[i] += diff * alpha
+            self._current[i] += (self._targets[i] - self._current[i]) * 0.35
         self.setNeedsDisplay_(True)
 
     def drawRect_(self, dirty):
         w = self.bounds().size.width
         h = self.bounds().size.height
+        r = h / 2.0
 
         NSColor.clearColor().setFill()
         NSBezierPath.fillRect_(self.bounds())
 
-        # Pill background with subtle border glow
-        NSColor.colorWithRed_green_blue_alpha_(0.12, 0.75, 0.60, 0.18).setFill()
-        NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
-            ((-1.0, -1.0), (w + 2, h + 2)), (h + 2) / 2, (h + 2) / 2
-        ).fill()
+        # Fondo oscuro sólido — visible en modo claro y oscuro
+        pill = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
+            ((0.0, 0.0), (w, h)), r, r
+        )
+        NSColor.colorWithRed_green_blue_alpha_(0.08, 0.08, 0.12, 0.94).setFill()
+        pill.fill()
 
-        NSColor.colorWithRed_green_blue_alpha_(0.07, 0.08, 0.10, 0.95).setFill()
-        NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
-            ((0.0, 0.0), (w, h)), h / 2, h / 2
-        ).fill()
+        # Borde blanco sutil para contraste en modo oscuro
+        NSColor.colorWithRed_green_blue_alpha_(1.0, 1.0, 1.0, 0.18).setStroke()
+        pill.setLineWidth_(1.0)
+        pill.stroke()
 
-        # Bars
-        pad_x  = 40.0
+        # Barras
+        pad_x  = 36.0
         bar_w  = 4.0
         area_w = w - pad_x * 2
         gap    = (area_w - BAR_COUNT * bar_w) / max(BAR_COUNT - 1, 1)
 
         for i, lvl in enumerate(self._current):
-            idle   = 0.12 + 0.08 * np.sin(self._idle_t * 4.0 + i * 0.5)
-            height = max(idle * h, lvl * h)
+            idle   = 0.14 + 0.08 * np.sin(self._idle_t * 3.8 + i * 0.45)
+            height = max(idle * h * 0.9, lvl * h * 0.82)
             x      = pad_x + i * (bar_w + gap)
             y      = (h - height) / 2.0
 
-            t      = i / BAR_COUNT
-            bright = 0.55 + lvl * 0.45
-            rc     = 0.04 * bright
-            gc     = (0.82 + t * 0.15) * bright
-            bc     = (0.90 - t * 0.30) * bright
-            alpha  = 0.75 + lvl * 0.25
+            t     = i / BAR_COUNT
+            # Colores vibrantes: cyan → verde — alto contraste sobre fondo oscuro
+            rc    = 0.10 + lvl * 0.20
+            gc    = 0.85 + t * 0.12
+            bc    = 0.95 - t * 0.40
+            alpha = 0.85 + lvl * 0.15
 
             NSColor.colorWithRed_green_blue_alpha_(rc, gc, bc, alpha).setFill()
             NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
@@ -132,25 +136,30 @@ class WaveformView(NSView):
 class WaveformOverlay:
 
     def __init__(self):
-        # visibleFrame excluye Dock y barra de menú
-        visible = NSScreen.mainScreen().visibleFrame()
-        sw  = visible.size.width
-        sox = visible.origin.x
-        soy = visible.origin.y   # borde inferior justo encima del Dock
-        ow, oh = 480, 72
-        ox  = sox + (sw - ow) / 2.0
-        oy  = soy + 16            # 16 px sobre el Dock
+        screen = NSScreen.mainScreen().frame()
+        sw     = screen.size.width
+        ow, oh = 460, 68
+        ox     = (sw - ow) / 2.0
+        oy     = 90.0
+
+        # NSWindowStyleMaskNonactivatingPanel = 128 — necesario para apps background
+        style  = NSWindowStyleMaskBorderless | 128
 
         self._win = NSPanel.alloc().initWithContentRect_styleMask_backing_defer_(
             ((ox, oy), (ow, oh)),
-            NSWindowStyleMaskBorderless,
+            style,
             NSBackingStoreBuffered,
             False,
         )
-        self._win.setLevel_(NSFloatingWindowLevel + 2)
+        # NSStatusWindowLevel (25) — por encima de ventanas normales y Dock
+        self._win.setLevel_(NSStatusWindowLevel + 1)
         self._win.setOpaque_(False)
         self._win.setBackgroundColor_(NSColor.clearColor())
-        self._win.setCollectionBehavior_(NSWindowCollectionBehaviorCanJoinAllSpaces)
+        self._win.setCollectionBehavior_(
+            NSWindowCollectionBehaviorCanJoinAllSpaces |
+            NSWindowCollectionBehaviorStationary |
+            NSWindowCollectionBehaviorIgnoresCycle
+        )
         self._win.setHasShadow_(True)
         self._win.setIgnoresMouseEvents_(True)
         self._win.setReleasedWhenClosed_(False)
@@ -236,31 +245,24 @@ class WisperBar(rumps.App):
 
     # ── Overlay-Timer ─────────────────────────────────────────────────────────
 
-    @rumps.timer(0.05)
+    @rumps.timer(0.016)
     def _overlay_tick(self, _):
-        while True:
-            try:
-                fn = self._main_q.get_nowait()
-            except queue.Empty:
-                break
+        try:
+            fn = self._main_q.get_nowait()
             try:
                 fn()
             except Exception as exc:
                 print(f"[WisperBar] error: {exc}", flush=True)
+        except queue.Empty:
+            pass
         if self.recording and self._overlay:
             self._overlay.update(self._levels)
 
     # ── Modell laden ──────────────────────────────────────────────────────────
 
     def _load_model(self):
-        try:
-            from huggingface_hub import snapshot_download
-            self.lbl_status.title = "⬇️  Descargando modelo…"
-            snapshot_download(repo_id=MODEL_REPO)
-            self.model = True
-            self.lbl_status.title = "✅  Bereit  –  mantener ⌥ izquierdo"
-        except Exception as e:
-            self.lbl_status.title = f"❌  {e}"
+        self.model = True
+        self.lbl_status.title = "✅  Bereit  –  mantener ⌥ izquierdo"
 
     # ── Aufnahme ──────────────────────────────────────────────────────────────
 
