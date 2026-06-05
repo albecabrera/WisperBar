@@ -681,7 +681,8 @@ class WisperBar(rumps.App):
         self._config_panel.show(self._llm_models)
 
     def _on_config_save(self, new_cfg: dict):
-        self._cfg         = new_cfg
+        self._cfg          = new_cfg
+        self._config_panel = None   # force rebuild next open (cfg ref changed)
         save_config(new_cfg)
         self._workflow_id = new_cfg.get("workflow", "transcribir")
         self._llm         = LLMService(timeout=int(new_cfg.get("ollama_timeout", 60)))
