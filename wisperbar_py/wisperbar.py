@@ -38,6 +38,7 @@ from workflows import (
     WORKFLOWS, WORKFLOW_BY_ID,
     get_system_prompt, get_processing_label, workflow_menu_label,
 )
+from config_panel import ConfigPanel
 
 # ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -306,6 +307,8 @@ class WisperBar(rumps.App):
         self._spinner_idx    = 0
         self._spinner_active = False
         self._spinner_ticks  = 0
+        self._config_panel  = None
+        self._ollama_models  = []
 
         self._build_menu()
         threading.Thread(target=self._load_model, daemon=True).start()
@@ -350,6 +353,8 @@ class WisperBar(rumps.App):
 
         self.lbl_version = rumps.MenuItem(f"WisperBar v{APP_VERSION}  •  build {APP_BUILD}")
 
+        self.btn_config = rumps.MenuItem("⚙️  Configuración…", callback=self._open_config)
+
         self.menu = [
             self.lbl_version,
             None,
@@ -366,6 +371,7 @@ class WisperBar(rumps.App):
             None,
             *self.lang_items,
             None,
+            self.btn_config,
             rumps.MenuItem("Salir", callback=lambda _: rumps.quit_application()),
         ]
         self._refresh_actions()
@@ -419,7 +425,8 @@ class WisperBar(rumps.App):
                     save_config(self._cfg)
         except Exception:
             pass
-        self._ollama_ok = is_up
+        self._ollama_ok     = is_up
+        self._ollama_models = models
         self._main_q.put(lambda: self._update_ollama_label(is_up, models))
 
     def _update_ollama_label(self, is_up: bool, models: list[str]):
@@ -604,6 +611,30 @@ class WisperBar(rumps.App):
         save_config(self._cfg)
         for item in self.workflow_items:
             item.state = (item._workflow_id == self._workflow_id)
+
+    # ── Config Panel ─────────────────────────────────────────────────────────
+
+    def _open_config(self, _=None):
+        if self._config_panel is None:
+            self._config_panel = ConfigPanel(
+                cfg=self._cfg,
+                ollama_service=self._ollama,
+                on_save=self._on_config_save,
+            )
+        self._config_panel.show(self._ollama_models)
+
+    def _on_config_save(self, new_cfg: dict):
+        self._cfg          = new_cfg
+        save_config(new_cfg)
+        self._workflow_id  = new_cfg.get("workflow", "transcribir")
+        self._ollama_model = new_cfg.get("ollama_model", "")
+        self._ollama = OllamaService(
+            base_url=new_cfg.get("ollama_url", "http://localhost:11434"),
+            timeout=int(new_cfg.get("ollama_timeout", 60)),
+        )
+        for item in self.workflow_items:
+            item.state = (item._workflow_id == self._workflow_id)
+        threading.Thread(target=self._check_ollama, daemon=True).start()
 
     # ── Spinner ───────────────────────────────────────────────────────────────
 
