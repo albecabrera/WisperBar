@@ -375,6 +375,7 @@ class WisperBar(rumps.App):
 
         self.menu = [
             self.lbl_version,
+            self.btn_config,
             None,
             self.btn_record,
             None,
@@ -389,7 +390,6 @@ class WisperBar(rumps.App):
             None,
             *self.lang_items,
             None,
-            self.btn_config,
             rumps.MenuItem(t("menu_quit", lg), callback=lambda _: rumps.quit_application()),
         ]
         self._refresh_actions()
