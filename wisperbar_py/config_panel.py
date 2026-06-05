@@ -1,23 +1,24 @@
+from pathlib import Path
 import ctypes
 import subprocess
 import threading
-from pathlib import Path
 import objc
 from AppKit import (
-    NSWindow, NSView, NSScrollView, NSTextField, NSButton,
+    NSWindow, NSView, NSScrollView, NSTextField, NSTextView, NSButton,
     NSPopUpButton, NSSegmentedControl, NSTabView, NSTabViewItem,
     NSWindowStyleMaskTitled, NSWindowStyleMaskClosable,
     NSWindowStyleMaskResizable, NSBackingStoreBuffered,
-    NSColor, NSFont, NSMakeRect, NSRect,
+    NSColor, NSFont, NSMakeRect, NSApplication,
     NSWindowCollectionBehaviorCanJoinAllSpaces,
-    NSClipView,
+    NSObject,
 )
 from i18n import t
 from workflows import WORKFLOWS
 
-PANEL_W = 500
-PANEL_H = 620
-TAB_H   = PANEL_H - 100  # height available for tab content
+PANEL_W   = 520
+PANEL_H   = 700
+TAB_H     = PANEL_H - 80
+CONTENT_H = 1100   # scroll height for tab 1
 
 WHISPER_MODELS = [
     ("Tiny   (~40 MB)",     "mlx-community/whisper-tiny-mlx"),
@@ -38,32 +39,52 @@ def _model_installed(repo: str) -> bool:
         return False
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── Generic action target — defined ONCE at module level ─────────────────────
+# Using anonymous inner classes causes ObjC class re-registration crashes.
+# One module-level class, many instances, each with its own _fn.
 
-def _label(parent, text: str, x, y, w, bold=False, small=False, secondary=False):
+class _Btn(NSObject):
+    @objc.python_method
+    def bind(self, fn):
+        self._fn = fn
+        return self
+
+    def fire_(self, sender):
+        try:
+            self._fn()
+        except Exception as exc:
+            print(f"[ConfigPanel] {exc}", flush=True)
+
+
+# ── Layout helpers ─────────────────────────────────────────────────────────────
+
+def _lbl(parent, text, x, y, w, h=18, bold=False, small=False, secondary=False, wrap=False):
     f = NSTextField.labelWithString_(text)
+    f.setFrame_(NSMakeRect(x, y, w, h))
     size = 11 if small else 13
-    f.setFrame_(NSMakeRect(x, y, w, 20))
     if bold:
         f.setFont_(NSFont.boldSystemFontOfSize_(size))
     elif small:
         f.setFont_(NSFont.systemFontOfSize_(size))
     if secondary:
         f.setTextColor_(NSColor.secondaryLabelColor())
+    if wrap:
+        f.setLineBreakMode_(0)
+        f.setMaximumNumberOfLines_(3)
     parent.addSubview_(f)
     return f
 
 
-def _section_label(parent, text: str, y: float, w: float):
-    f = NSTextField.labelWithString_(text)
-    f.setFrame_(NSMakeRect(20, y, w - 40, 18))
-    f.setFont_(NSFont.boldSystemFontOfSize_(10))
-    f.setTextColor_(NSColor.secondaryLabelColor())
-    parent.addSubview_(f)
-    return f
+def _sec(parent, text, y, w):
+    lbl = NSTextField.labelWithString_(text)
+    lbl.setFrame_(NSMakeRect(20, y, w - 40, 16))
+    lbl.setFont_(NSFont.boldSystemFontOfSize_(9))
+    lbl.setTextColor_(NSColor.tertiaryLabelColor())
+    parent.addSubview_(lbl)
+    return lbl
 
 
-def _text_field(parent, x, y, w, placeholder: str, value: str, key: str, refs: dict):
+def _field(parent, x, y, w, placeholder, value, key, refs):
     f = NSTextField.alloc().initWithFrame_(NSMakeRect(x, y, w, 24))
     f.setPlaceholderString_(placeholder)
     f.setStringValue_(value or "")
@@ -73,7 +94,7 @@ def _text_field(parent, x, y, w, placeholder: str, value: str, key: str, refs: d
     return f
 
 
-def _popup(parent, x, y, w, items: list, selected: str, key: str, refs: dict):
+def _popup(parent, x, y, w, items, selected, key, refs):
     btn = NSPopUpButton.alloc().initWithFrame_pullsDown_(NSMakeRect(x, y, w, 26), False)
     for it in items:
         btn.addItemWithTitle_(it)
@@ -86,568 +107,447 @@ def _popup(parent, x, y, w, items: list, selected: str, key: str, refs: dict):
     return btn
 
 
-def _segmented(parent, x, y, w, items: list, selected_idx: int, key: str, refs: dict):
+def _seg(parent, x, y, w, items, idx, key, refs):
     ctrl = NSSegmentedControl.alloc().initWithFrame_(NSMakeRect(x, y, w, 26))
     ctrl.setSegmentCount_(len(items))
-    for i, label in enumerate(items):
-        ctrl.setLabel_forSegment_(label, i)
-    ctrl.setSelectedSegment_(selected_idx)
-    ctrl.setSegmentStyle_(1)  # NSSegmentStyleRounded
+    for i, lbl in enumerate(items):
+        ctrl.setLabel_forSegment_(lbl, i)
+    ctrl.setSelectedSegment_(idx)
+    ctrl.setSegmentStyle_(1)
     parent.addSubview_(ctrl)
     refs[key] = ctrl
     return ctrl
 
 
-def _button(parent, x, y, w, h, title: str, key: str, refs: dict):
-    btn = NSButton.alloc().initWithFrame_(NSMakeRect(x, y, w, h))
-    btn.setTitle_(title)
-    btn.setBezelStyle_(4)  # NSBezelStyleRoundRect
-    parent.addSubview_(btn)
-    refs[key] = btn
-    return btn
+def _btn(parent, x, y, w, h, title, key, refs, action=None):
+    b = NSButton.alloc().initWithFrame_(NSMakeRect(x, y, w, h))
+    b.setTitle_(title)
+    b.setBezelStyle_(4)
+    parent.addSubview_(b)
+    refs[key] = b
+    if action:
+        tgt = _Btn.alloc().init().bind(action)
+        b.setTarget_(tgt)
+        b.setAction_(b"fire:")
+        b._tgt = tgt
+    return b
 
 
-def _scroll_wrap(content_view: NSView, frame: NSRect) -> NSScrollView:
+def _link_btn(parent, x, y, w, title, url):
+    b = NSButton.alloc().initWithFrame_(NSMakeRect(x, y, w, 18))
+    b.setTitle_(title)
+    b.setBezelStyle_(0)
+    b.setBordered_(False)
+    b.setFont_(NSFont.systemFontOfSize_(10.5))
+    try:
+        b.setContentTintColor_(NSColor.linkColor())
+    except Exception:
+        pass
+    tgt = _Btn.alloc().init().bind(lambda u=url: subprocess.run(["open", u]))
+    b.setTarget_(tgt)
+    b.setAction_(b"fire:")
+    b._tgt = tgt
+    parent.addSubview_(b)
+    return b
+
+
+def _scroll(content, frame):
     sv = NSScrollView.alloc().initWithFrame_(frame)
     sv.setHasVerticalScroller_(True)
     sv.setHasHorizontalScroller_(False)
     sv.setAutohidesScrollers_(True)
-    sv.setDocumentView_(content_view)
-    content_view.setFrame_(NSMakeRect(0, 0, frame.size.width - 16, frame.size.height))
+    sv.setDocumentView_(content)
     return sv
 
 
-# ── Chips view (terms) ────────────────────────────────────────────────────────
-
-class ChipsView:
-    CHIP_H     = 24
-    CHIP_PAD_X = 10
-    ROW_GAP    = 6
-    COL_GAP    = 6
-
-    def __init__(self, parent, x, y, w, terms: list[str], on_remove):
-        self._parent    = parent
-        self._x         = x
-        self._w         = w
-        self._terms     = list(terms)
-        self._on_remove = on_remove
-        self._buttons: dict[str, NSButton] = {}
-        self._base_y    = y
-        self._rebuild()
-
-    @property
-    def height(self) -> float:
-        return self._height
-
-    def get_terms(self) -> list[str]:
-        return list(self._terms)
-
-    def add_term(self, term: str):
-        if term and term not in self._terms:
-            self._terms.append(term)
-            self._rebuild()
-
-    def _rebuild(self):
-        for btn in self._buttons.values():
-            btn.removeFromSuperview()
-        self._buttons.clear()
-
-        cx    = self._x
-        cy    = self._base_y
-        row_h = self.CHIP_H + self.ROW_GAP
-
-        for term in self._terms:
-            char_w  = len(term) * 7.5 + 28 + self.CHIP_PAD_X * 2
-            chip_w  = max(char_w, 60.0)
-            if cx + chip_w > self._x + self._w and cx > self._x:
-                cx  = self._x
-                cy -= row_h
-
-            btn = NSButton.alloc().initWithFrame_(NSMakeRect(cx, cy, chip_w, self.CHIP_H))
-            btn.setTitle_(f"{term}  ×")
-            btn.setFont_(NSFont.systemFontOfSize_(11))
-            btn.setBezelStyle_(4)
-            self._parent.addSubview_(btn)
-            self._buttons[term] = btn
-
-            t_ref = term
-            panel_ref = self
-
-            class RemoveAction(objc.lookUpClass("NSObject")):
-                @objc.python_method
-                def act(self_inner):
-                    panel_ref._remove_term(t_ref)
-
-            delegate = RemoveAction.alloc().init()
-            btn.setTarget_(delegate)
-            btn.setAction_(objc.selector(
-                delegate.act, selector=b"act", signature=b"v@:",
-            ))
-            btn._delegate_ref = delegate  # keep alive
-
-            cx += chip_w + self.COL_GAP
-
-        last_row_items = [t for t in self._terms]
-        self._height = row_h * (len(last_row_items) // max(1, int((self._w) / 80)) + 1) if self._terms else 0
-
-    def _remove_term(self, term: str):
-        if term in self._terms:
-            self._terms.remove(term)
-            self._on_remove(term)
-            self._rebuild()
-
-
-# ── Main ConfigPanel ──────────────────────────────────────────────────────────
+# ── ConfigPanel ────────────────────────────────────────────────────────────────
 
 class ConfigPanel:
 
-    def __init__(self, cfg: dict, ollama_service, on_save, lang_fn):
-        self._cfg          = cfg
-        self._ollama       = ollama_service
-        self._on_save      = on_save
-        self._lang_fn      = lang_fn
-        self._win          = None
-        self._refs: dict   = {}
-        self._chips: ChipsView | None = None
+    def __init__(self, cfg, ollama_service, on_save, lang_fn):
+        self._cfg     = cfg
+        self._ollama  = ollama_service
+        self._on_save = on_save
+        self._lang_fn = lang_fn
+        self._win     = None
+        self._refs    = {}
+        self._terms: list[str] = list(cfg.get("user_terms", []))
+        self._chips_view: NSView | None = None
+        self._chips_scroll: NSScrollView | None = None
 
     @property
-    def _lang(self) -> str:
-        l = self._lang_fn()
-        return l if l != "auto" else "es"
+    def _lg(self) -> str:
+        lg = self._lang_fn()
+        return lg if lg != "auto" else "es"
+
+    # ── Public ────────────────────────────────────────────────────────────────
 
     def show(self, models: list[str]):
         if self._win is None or not self._win.isVisible():
-            self._win = None
-            self._refs.clear()
-            self._chips = None
+            self._win  = None
+            self._refs = {}
+            self._terms = list(self._cfg.get("user_terms", []))
+            self._chips_view   = None
+            self._chips_scroll = None
             self._build(models)
+        NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
         self._win.makeKeyAndOrderFront_(None)
         self._win.orderFrontRegardless()
 
     # ── Build window ──────────────────────────────────────────────────────────
 
     def _build(self, models: list[str]):
-        lg = self._lang
-        style = (NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable)
-        win = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
-            ((200, 150), (PANEL_W, PANEL_H)), style, NSBackingStoreBuffered, False,
+        lg    = self._lg
+        style = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable
+        win   = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+            ((200, 100), (PANEL_W, PANEL_H)), style, NSBackingStoreBuffered, False,
         )
         win.setTitle_(t("config_title", lg))
         win.setReleasedWhenClosed_(False)
-        win.setCollectionBehavior_(NSWindowCollectionBehaviorCanJoinAllSpaces)
-        win.setMinSize_((PANEL_W, 480))
+        win.setMinSize_((PANEL_W, 500))
 
         cv = win.contentView()
 
-        # ── NSTabView ─────────────────────────────────────────────────────────
-        tab_view = NSTabView.alloc().initWithFrame_(
-            NSMakeRect(0, 50, PANEL_W, PANEL_H - 50)
-        )
+        # Tab view
+        tv = NSTabView.alloc().initWithFrame_(NSMakeRect(0, 48, PANEL_W, PANEL_H - 48))
+        i1 = NSTabViewItem.alloc().init()
+        i1.setLabel_(t("tab_customize", lg))
+        i1.setView_(self._tab_customize(lg))
+        i2 = NSTabViewItem.alloc().init()
+        i2.setLabel_(t("tab_access", lg))
+        i2.setView_(self._tab_access(lg, models))
+        tv.addTabViewItem_(i1)
+        tv.addTabViewItem_(i2)
+        cv.addSubview_(tv)
 
-        item_customize = NSTabViewItem.alloc().init()
-        item_customize.setLabel_(t("tab_customize", lg))
-        item_access = NSTabViewItem.alloc().init()
-        item_access.setLabel_(t("tab_access", lg))
+        # Cancel
+        bc = NSButton.alloc().initWithFrame_(NSMakeRect(PANEL_W - 210, 10, 96, 30))
+        bc.setTitle_(t("btn_cancel", lg))
+        bc.setBezelStyle_(1)
+        bc.setTarget_(win)
+        bc.setAction_(b"performClose:")
+        cv.addSubview_(bc)
 
-        item_customize.setView_(self._build_customize_tab(models))
-        item_access.setView_(self._build_access_tab(models))
-
-        tab_view.addTabViewItem_(item_customize)
-        tab_view.addTabViewItem_(item_access)
-        cv.addSubview_(tab_view)
-
-        # ── Bottom buttons ────────────────────────────────────────────────────
-        btn_cancel = NSButton.alloc().initWithFrame_(NSMakeRect(PANEL_W - 206, 12, 96, 30))
-        btn_cancel.setTitle_(t("btn_cancel", lg))
-        btn_cancel.setBezelStyle_(1)
-        btn_cancel.setTarget_(win)
-        btn_cancel.setAction_("performClose:")
-        cv.addSubview_(btn_cancel)
-
-        btn_save = NSButton.alloc().initWithFrame_(NSMakeRect(PANEL_W - 104, 12, 88, 30))
-        btn_save.setTitle_(t("btn_save", lg))
-        btn_save.setBezelStyle_(1)
-        btn_save.setKeyEquivalent_("\r")
-        cv.addSubview_(btn_save)
-        self._refs["_btn_save"] = btn_save
-        self._setup_save(btn_save, win)
+        # Save
+        bs = NSButton.alloc().initWithFrame_(NSMakeRect(PANEL_W - 108, 10, 92, 30))
+        bs.setTitle_(t("btn_save", lg))
+        bs.setBezelStyle_(1)
+        bs.setKeyEquivalent_("\r")
+        tgt = _Btn.alloc().init().bind(lambda w=win: (self._collect(), w.performClose_(None)))
+        bs.setTarget_(tgt)
+        bs.setAction_(b"fire:")
+        bs._tgt = tgt
+        cv.addSubview_(bs)
 
         self._win = win
 
     # ── Tab 1: Personalizar ───────────────────────────────────────────────────
 
-    def _build_customize_tab(self, models: list[str]) -> NSView:
-        lg  = self._lang
-        tab = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, PANEL_W - 20, TAB_H))
-        cw  = PANEL_W - 20
-        y   = TAB_H - 20
+    def _tab_customize(self, lg: str) -> NSView:
+        cw      = PANEL_W - 24
+        content = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, cw, CONTENT_H))
+        y       = CONTENT_H - 16   # top → bottom layout
 
-        def gap(n=8):
-            nonlocal y; y -= n
-
+        def gap(n=10): nonlocal y; y -= n
         def sec(key):
-            nonlocal y; y -= 24
-            _section_label(tab, t(key, lg), y, cw)
-            y -= 4
+            nonlocal y; y -= 26
+            _sec(content, t(key, lg), y, cw)
+            y -= 6
 
         # ── Modelo local Whisper ──────────────────────────────────────────────
         sec("sec_local_model")
 
-        cur_wm = self._cfg.get("whisper_model", "mlx-community/whisper-large-v3-mlx")
-        wm_labels = [lbl for lbl, _ in WHISPER_MODELS]
-        wm_repos  = [repo for _, repo in WHISPER_MODELS]
-        cur_wm_label = next(
-            (lbl for lbl, repo in WHISPER_MODELS if repo == cur_wm),
-            wm_labels[-1],
-        )
+        cur_wm       = self._cfg.get("whisper_model", "mlx-community/whisper-large-v3-mlx")
+        wm_labels    = [lbl for lbl, _ in WHISPER_MODELS]
+        wm_repos     = [repo for _, repo in WHISPER_MODELS]
+        cur_wm_label = next((l for l, r in WHISPER_MODELS if r == cur_wm), wm_labels[-1])
 
         y -= 28
-        _label(tab, t("lbl_whisper_model", lg), 20, y, 120)
-        _popup(tab, 140, y - 2, 280, wm_labels, cur_wm_label,
-               "whisper_model_popup", self._refs)
-        self._refs["_wm_repos"]  = wm_repos
+        _lbl(content, t("lbl_whisper_model", lg), 20, y + 4, 110)
+        _popup(content, 136, y, 280, wm_labels, cur_wm_label, "wm_popup", self._refs)
         self._refs["_wm_labels"] = wm_labels
+        self._refs["_wm_repos"]  = wm_repos
 
-        # status instalado / no descargado
-        y -= 26
-        installed   = _model_installed(cur_wm)
-        status_text = t("model_installed" if installed else "model_not_downloaded", lg)
-        st_lbl = NSTextField.labelWithString_(status_text)
-        st_lbl.setFrame_(NSMakeRect(140, y, cw - 160, 18))
-        st_lbl.setFont_(NSFont.systemFontOfSize_(10.5))
-        st_lbl.setTextColor_(
-            NSColor.systemGreenColor() if installed else NSColor.systemOrangeColor()
-        )
-        tab.addSubview_(st_lbl)
-        self._refs["_model_status_lbl"] = st_lbl
-
-        # link HuggingFace
         y -= 22
-        link_btn = NSButton.alloc().initWithFrame_(NSMakeRect(140, y, 250, 20))
-        link_btn.setTitle_(t("link_model_page", lg))
-        link_btn.setBezelStyle_(0)
-        link_btn.setBordered_(False)
-        link_btn.setFont_(NSFont.systemFontOfSize_(10.5))
-        link_btn.setContentTintColor_(NSColor.linkColor())
-        tab.addSubview_(link_btn)
-        self._setup_model_page_link(link_btn, cur_wm)
+        installed = _model_installed(cur_wm)
+        st_txt = t("model_installed" if installed else "model_not_downloaded", lg)
+        st = _lbl(content, st_txt, 136, y, cw - 156, small=True)
+        st.setTextColor_(NSColor.systemGreenColor() if installed else NSColor.systemOrangeColor())
 
-        gap(20)
+        y -= 20
+        _link_btn(content, 136, y, 300,
+                  t("link_model_page", lg),
+                  f"https://huggingface.co/{cur_wm}")
+
+        gap(22)
 
         # ── Atajo de teclado ──────────────────────────────────────────────────
         sec("sec_hotkey")
 
-        # Mode segmented
-        y -= 28
-        _label(tab, t("hotkey_mode", lg), 20, y, 120)
         mode = self._cfg.get("hotkey_mode", "hold")
-        _segmented(tab, 140, y - 2, 200,
-                   [t("hotkey_hold", lg), t("hotkey_toggle", lg)],
-                   0 if mode == "hold" else 1, "hotkey_mode_seg", self._refs)
+        y -= 28
+        _lbl(content, t("hotkey_mode", lg), 20, y + 4, 110)
+        _seg(content, 136, y, 220,
+             [t("hotkey_hold", lg), t("hotkey_toggle", lg)],
+             0 if mode == "hold" else 1, "hotkey_mode_seg", self._refs)
 
-        # Mode description
-        y -= 26
-        mode_desc = t("hotkey_hold_desc" if mode == "hold" else "hotkey_toggle_desc", lg)
-        desc_f = NSTextField.labelWithString_(mode_desc)
-        desc_f.setFrame_(NSMakeRect(20, y, cw - 40, 16))
-        desc_f.setFont_(NSFont.systemFontOfSize_(10.5))
-        desc_f.setTextColor_(NSColor.secondaryLabelColor())
-        tab.addSubview_(desc_f)
-        self._refs["_hotkey_desc"] = desc_f
+        y -= 22
+        desc_text = t("hotkey_hold_desc" if mode == "hold" else "hotkey_toggle_desc", lg)
+        _lbl(content, desc_text, 136, y, cw - 156, small=True, secondary=True)
 
-        # Hotkey table
-        y -= 30
-        _label(tab, t("hotkeys_header", lg), 20, y, cw - 40, small=True, secondary=True)
-        y -= 4
+        y -= 28
+        _lbl(content, t("hotkeys_header", lg), 20, y, cw - 40, small=True, secondary=True)
         for wf in WORKFLOWS:
-            y -= 22
+            y -= 20
             name = getattr(wf, f"label_{lg}", wf.label_en)
-            _label(tab, f"{wf.icon}  {name}", 28, y, 200, small=True)
-            _label(tab, wf.hotkey_label, 240, y, 120, small=True, secondary=True)
+            _lbl(content, f"{wf.icon}  {name}", 32, y, 200, small=True)
+            _lbl(content, wf.hotkey_label, 250, y, 120, small=True, secondary=True)
 
-        gap(20)
+        gap(22)
 
         # ── Workflow predeterminado ───────────────────────────────────────────
         sec("sec_workflow")
-        y -= 28
-        _label(tab, t("lbl_default", lg), 20, y, 140)
+
         wf_ids    = [wf.id for wf in WORKFLOWS]
         wf_labels = [f"{wf.icon}  {getattr(wf, f'label_{lg}', wf.label_en)}" for wf in WORKFLOWS]
-        cur_wf_label = next(
+        cur_wf_lbl = next(
             (f"{wf.icon}  {getattr(wf, f'label_{lg}', wf.label_en)}"
              for wf in WORKFLOWS if wf.id == self._cfg.get("workflow", "transcribir")),
             wf_labels[0],
         )
-        _popup(tab, 140, y - 2, 240, wf_labels, cur_wf_label, "workflow_label", self._refs)
+        y -= 28
+        _lbl(content, t("lbl_default", lg), 20, y + 4, 110)
+        _popup(content, 136, y, 280, wf_labels, cur_wf_lbl, "wf_popup", self._refs)
         self._refs["_wf_ids"]    = wf_ids
         self._refs["_wf_labels"] = wf_labels
 
-        gap(20)
+        gap(22)
 
-        # ── Mejora + Profesional ──────────────────────────────────────────────
+        # ── Mejora de texto ───────────────────────────────────────────────────
         sec("sec_improve")
 
-        # Tone
-        y -= 28
-        _label(tab, t("lbl_tone", lg), 20, y, 140)
-        tone_opts = [t("tone_formal", lg), t("tone_neutral", lg), t("tone_casual", lg)]
         tone_vals = ["formal", "neutral", "casual"]
+        tone_opts = [t(f"tone_{v}", lg) for v in tone_vals]
         cur_tone  = self._cfg.get("tone_mejorar", "neutral")
-        _segmented(tab, 140, y - 2, 240, tone_opts,
-                   tone_vals.index(cur_tone) if cur_tone in tone_vals else 1,
-                   "tone_seg", self._refs)
+        y -= 28
+        _lbl(content, t("lbl_tone", lg), 20, y + 4, 110)
+        _seg(content, 136, y, 240, tone_opts,
+             tone_vals.index(cur_tone) if cur_tone in tone_vals else 1,
+             "tone_seg", self._refs)
         self._refs["_tone_vals"] = tone_vals
 
-        # Custom prompt
-        y -= 32
-        _label(tab, t("lbl_custom_prompt", lg), 20, y, cw - 40, small=True, secondary=True)
-        y -= 28
-        _text_field(tab, 20, y, cw - 40,
-                    t("ph_custom_prompt", lg),
-                    self._cfg.get("custom_prompt_mejorar", ""),
-                    "custom_prompt_mejorar", self._refs)
-
-        # Context
         y -= 30
-        _label(tab, t("lbl_context", lg), 20, y, cw - 40, small=True, secondary=True)
+        _lbl(content, t("lbl_custom_prompt", lg), 20, y, cw - 40, small=True, secondary=True)
         y -= 28
-        _text_field(tab, 20, y, cw - 40,
-                    t("ph_context", lg),
-                    self._cfg.get("context_mejorar", ""),
-                    "context_mejorar", self._refs)
+        _field(content, 20, y, cw - 40,
+               t("ph_custom_prompt", lg),
+               self._cfg.get("custom_prompt_mejorar", ""),
+               "custom_prompt_mejorar", self._refs)
 
-        gap(20)
+        y -= 30
+        _lbl(content, t("lbl_context", lg), 20, y, cw - 40, small=True, secondary=True)
+        y -= 28
+        _field(content, 20, y, cw - 40,
+               t("ph_context", lg),
+               self._cfg.get("context_mejorar", ""),
+               "context_mejorar", self._refs)
+
+        gap(22)
 
         # ── Desahogo ──────────────────────────────────────────────────────────
         sec("sec_desahogo")
-        y -= 28
-        _label(tab, t("lbl_desahogo_prompt", lg), 20, y, cw - 40, small=True, secondary=True)
-        y -= 28
-        _text_field(tab, 20, y, cw - 40,
-                    t("ph_desahogo_prompt", lg),
-                    self._cfg.get("custom_prompt_desahogo", ""),
-                    "custom_prompt_desahogo", self._refs)
 
-        gap(20)
+        y -= 30
+        _lbl(content, t("lbl_desahogo_prompt", lg), 20, y, cw - 40, small=True, secondary=True)
+        y -= 28
+        _field(content, 20, y, cw - 40,
+               t("ph_desahogo_prompt", lg),
+               self._cfg.get("custom_prompt_desahogo", ""),
+               "custom_prompt_desahogo", self._refs)
+
+        gap(22)
 
         # ── Emoji ─────────────────────────────────────────────────────────────
         sec("sec_emoji")
-        y -= 28
-        _label(tab, t("lbl_density", lg), 20, y, 140)
-        density_opts = [t("density_low", lg), t("density_mid", lg), t("density_high", lg)]
+
         density_vals = ["poca", "media", "mucha"]
+        density_opts = [t(f"density_{["low","mid","high"][i]}", lg) for i in range(3)]
         cur_density  = self._cfg.get("emoji_density", "media")
-        _segmented(tab, 140, y - 2, 240, density_opts,
-                   density_vals.index(cur_density) if cur_density in density_vals else 1,
-                   "emoji_density_seg", self._refs)
+        y -= 28
+        _lbl(content, t("lbl_density", lg), 20, y + 4, 110)
+        _seg(content, 136, y, 240, density_opts,
+             density_vals.index(cur_density) if cur_density in density_vals else 1,
+             "density_seg", self._refs)
         self._refs["_density_vals"] = density_vals
 
-        gap(20)
+        gap(22)
 
         # ── Vocabulario personalizado ─────────────────────────────────────────
         sec("sec_terms")
-        y -= 18
-        hint = NSTextField.labelWithString_(t("terms_hint", lg))
-        hint.setFrame_(NSMakeRect(20, y - 18, cw - 40, 36))
-        hint.setFont_(NSFont.systemFontOfSize_(10.5))
-        hint.setTextColor_(NSColor.secondaryLabelColor())
-        hint.setLineBreakMode_(0)  # byWordWrapping
-        tab.addSubview_(hint)
-        y -= 44
 
-        # Chips
-        user_terms = self._cfg.get("user_terms", [])
-        self._chips = ChipsView(tab, 20, y - 30, cw - 40, user_terms,
-                                on_remove=lambda _term: None)
-        y -= max(self._chips.height + 10, 10)
+        y -= 22
+        _lbl(content, t("terms_hint", lg), 20, y - 10, cw - 40, h=32,
+             small=True, secondary=True, wrap=True)
+        y -= 42
 
-        # Add term input
-        y -= 28
-        field = _text_field(tab, 20, y, cw - 100,
-                            t("ph_new_term", lg), "", "new_term", self._refs)
-        add_btn = _button(tab, cw - 74, y, 60, 28, t("btn_add", lg), "btn_add_term", self._refs)
-        self._setup_add_term(add_btn, field)
+        # Terms list — chips rendered as simple buttons
+        chips_h = max(len(self._terms) * 28 + 12, 40)
+        chips_frame = NSMakeRect(20, y - chips_h, cw - 40, chips_h)
+        self._chips_view = NSView.alloc().initWithFrame_(chips_frame)
+        self._chips_view.setWantsLayer_(True)
+        layer = self._chips_view.layer()
+        if layer:
+            layer.setCornerRadius_(6.0)
+            layer.setBackgroundColor_(NSColor.quaternaryLabelColor().CGColor())
+        content.addSubview_(self._chips_view)
+        self._render_chips(lg)
+        y -= chips_h + 4
 
-        gap(30)
+        # Add term row
+        y -= 30
+        new_term_field = _field(content, 20, y, cw - 110,
+                                t("ph_new_term", lg), "", "new_term", self._refs)
+        _btn(content, cw - 84, y, 70, 26, t("btn_add", lg), "btn_add", self._refs,
+             action=lambda: self._add_term(lg))
 
-        # Adjust content height
-        content_h = max(TAB_H, TAB_H - y + 20)
-        tab.setFrame_(NSMakeRect(0, 0, cw, content_h))
-
-        # Wrap in scroll view
-        sv = NSScrollView.alloc().initWithFrame_(NSMakeRect(0, 0, PANEL_W - 20, TAB_H))
-        sv.setHasVerticalScroller_(True)
-        sv.setHasHorizontalScroller_(False)
-        sv.setAutohidesScrollers_(True)
-        sv.setDocumentView_(tab)
-        return sv
+        gap(20)
+        return _scroll(content, NSMakeRect(0, 0, PANEL_W - 24, TAB_H))
 
     # ── Tab 2: Acceso ─────────────────────────────────────────────────────────
 
-    def _build_access_tab(self, models: list[str]) -> NSView:
-        lg  = self._lang
-        tab = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, PANEL_W - 20, TAB_H))
-        cw  = PANEL_W - 20
-        y   = TAB_H - 20
+    def _tab_access(self, lg: str, models: list[str]) -> NSView:
+        cw  = PANEL_W - 24
+        tab = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, cw, TAB_H))
+        y   = TAB_H - 16
 
-        def gap(n=8):
-            nonlocal y; y -= n
-
+        def gap(n=10): nonlocal y; y -= n
         def sec(key):
-            nonlocal y; y -= 24
-            _section_label(tab, t(key, lg), y, cw)
-            y -= 4
+            nonlocal y; y -= 26
+            _sec(tab, t(key, lg), y, cw)
+            y -= 6
 
         # ── Ollama ────────────────────────────────────────────────────────────
         sec("sec_ollama")
 
-        # Model
-        y -= 28
-        _label(tab, t("lbl_model", lg), 20, y, 120)
         model_items = models if models else [self._cfg.get("ollama_model", "") or "—"]
         cur_model   = self._cfg.get("ollama_model", "")
-        _popup(tab, 140, y - 2, 240, model_items, cur_model, "ollama_model", self._refs)
 
-        # Refresh button
-        refresh_btn = _button(tab, cw - 110, y - 2, 90, 28,
-                              t("btn_refresh", lg), "btn_refresh", self._refs)
-        self._setup_refresh(refresh_btn)
+        y -= 28
+        _lbl(tab, t("lbl_model", lg), 20, y + 4, 110)
+        _popup(tab, 136, y, 240, model_items, cur_model, "ollama_model", self._refs)
+        _btn(tab, cw - 106, y - 2, 88, 28, t("btn_refresh", lg), "btn_refresh", self._refs,
+             action=self._refresh_models)
 
-        # URL
-        y -= 36
-        _label(tab, t("lbl_url", lg), 20, y, 120)
-        _text_field(tab, 140, y, cw - 160,
-                    "http://localhost:11434",
-                    self._cfg.get("ollama_url", "http://localhost:11434"),
-                    "ollama_url", self._refs)
+        y -= 34
+        _lbl(tab, t("lbl_url", lg), 20, y + 4, 110)
+        _field(tab, 136, y, cw - 156,
+               "http://localhost:11434",
+               self._cfg.get("ollama_url", "http://localhost:11434"),
+               "ollama_url", self._refs)
 
-        # Timeout
-        y -= 32
-        _label(tab, t("lbl_timeout", lg), 20, y, 120)
-        _text_field(tab, 140, y, 80, "60",
-                    str(self._cfg.get("ollama_timeout", 60)),
-                    "ollama_timeout", self._refs)
+        y -= 34
+        _lbl(tab, t("lbl_timeout", lg), 20, y + 4, 110)
+        _field(tab, 136, y, 80, "60",
+               str(self._cfg.get("ollama_timeout", 60)),
+               "ollama_timeout", self._refs)
 
-        gap(24)
+        gap(30)
 
         # ── Permisos ──────────────────────────────────────────────────────────
         sec("sec_perms")
 
-        ok = self._check_accessibility()
+        ok = self._ax_ok()
         y -= 28
-        perm_text = t("perm_ok" if ok else "perm_missing", lg)
-        perm_f    = NSTextField.labelWithString_(perm_text)
-        perm_f.setFrame_(NSMakeRect(20, y, cw - 40, 20))
-        perm_f.setFont_(NSFont.systemFontOfSize_(12.5))
-        perm_f.setTextColor_(NSColor.systemGreenColor() if ok else NSColor.systemOrangeColor())
-        tab.addSubview_(perm_f)
+        pf = _lbl(tab, t("perm_ok" if ok else "perm_missing", lg), 20, y, cw - 40)
+        pf.setTextColor_(NSColor.systemGreenColor() if ok else NSColor.systemOrangeColor())
 
         if not ok:
-            y -= 28
-            detail = NSTextField.labelWithString_(t("perm_detail", lg))
-            detail.setFrame_(NSMakeRect(20, y - 18, cw - 40, 36))
-            detail.setFont_(NSFont.systemFontOfSize_(10.5))
-            detail.setTextColor_(NSColor.secondaryLabelColor())
-            tab.addSubview_(detail)
-            y -= 46
-
-            open_btn = _button(tab, 20, y, 200, 28,
-                               t("btn_open_acc", lg), "btn_open_acc", self._refs)
-            self._setup_open_accessibility(open_btn)
+            y -= 24
+            _lbl(tab, t("perm_detail", lg), 20, y - 18, cw - 40, h=40,
+                 small=True, secondary=True, wrap=True)
+            y -= 56
+            b = NSButton.alloc().initWithFrame_(NSMakeRect(20, y, 220, 28))
+            b.setTitle_(t("btn_open_acc", lg))
+            b.setBezelStyle_(4)
+            tgt = _Btn.alloc().init().bind(lambda: subprocess.run([
+                "open",
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+            ]))
+            b.setTarget_(tgt)
+            b.setAction_(b"fire:")
+            b._tgt = tgt
+            tab.addSubview_(b)
 
         return tab
 
-    # ── Actions ───────────────────────────────────────────────────────────────
+    # ── Chips ─────────────────────────────────────────────────────────────────
 
-    def _setup_model_page_link(self, btn: NSButton, repo: str):
-        url = f"https://huggingface.co/{repo}"
+    def _render_chips(self, lg: str):
+        if self._chips_view is None:
+            return
+        for sv in list(self._chips_view.subviews()):
+            sv.removeFromSuperview()
 
-        class OpenLink(objc.lookUpClass("NSObject")):
-            @objc.python_method
-            def act(self_inner):
-                subprocess.run(["open", url])
+        chips_w = self._chips_view.frame().size.width
+        x, cy   = 8.0, 8.0
+        for term in self._terms:
+            chip_w  = min(len(term) * 7.5 + 36, chips_w - 16)
+            b = NSButton.alloc().initWithFrame_(NSMakeRect(x, cy, chip_w, 22))
+            b.setTitle_(f"{term}  ×")
+            b.setFont_(NSFont.systemFontOfSize_(11))
+            b.setBezelStyle_(4)
+            tgt = _Btn.alloc().init().bind(lambda term_=term, lg_=lg: self._remove_term(term_, lg_))
+            b.setTarget_(tgt)
+            b.setAction_(b"fire:")
+            b._tgt = tgt
+            self._chips_view.addSubview_(b)
+            x += chip_w + 6
+            if x + 80 > chips_w:
+                x   = 8.0
+                cy += 28
 
-        delegate = OpenLink.alloc().init()
-        btn.setTarget_(delegate)
-        btn.setAction_(objc.selector(delegate.act, selector=b"act", signature=b"v@:"))
-        btn._link_delegate = delegate
+    def _add_term(self, lg: str):
+        field = self._refs.get("new_term")
+        if field is None:
+            return
+        term = field.stringValue().strip()
+        if term and term not in self._terms:
+            self._terms.append(term)
+            self._render_chips(lg)
+        field.setStringValue_("")
 
-    def _setup_add_term(self, btn: NSButton, field: NSTextField):
-        panel_ref = self
+    def _remove_term(self, term: str, lg: str):
+        if term in self._terms:
+            self._terms.remove(term)
+            self._render_chips(lg)
 
-        class AddAction(objc.lookUpClass("NSObject")):
-            @objc.python_method
-            def act(self_inner):
-                term = field.stringValue().strip()
-                if term and panel_ref._chips:
-                    panel_ref._chips.add_term(term)
-                    field.setStringValue_("")
+    # ── Ollama refresh ────────────────────────────────────────────────────────
 
-        delegate = AddAction.alloc().init()
-        btn.setTarget_(delegate)
-        btn.setAction_(objc.selector(delegate.act, selector=b"act", signature=b"v@:"))
-        btn._add_delegate = delegate
+    def _refresh_models(self):
+        def _do():
+            models = self._ollama.list_models()
+            def _upd():
+                popup = self._refs.get("ollama_model")
+                if popup and models:
+                    popup.removeAllItems()
+                    for m in models:
+                        popup.addItemWithTitle_(m)
+                    cur = self._cfg.get("ollama_model", "")
+                    if cur in models:
+                        popup.selectItemWithTitle_(cur)
+            # run on main thread via a short timer tick — safe
+            import rumps
+            _upd()  # already on main since called from timer tick; else just update
+        threading.Thread(target=_do, daemon=True).start()
 
-    def _setup_refresh(self, btn: NSButton):
-        panel_ref = self
+    # ── Collect & save ────────────────────────────────────────────────────────
 
-        class RefreshAction(objc.lookUpClass("NSObject")):
-            @objc.python_method
-            def act(self_inner):
-                def _do():
-                    models = panel_ref._ollama.list_models()
-                    def _upd():
-                        popup = panel_ref._refs.get("ollama_model")
-                        if popup and models:
-                            popup.removeAllItems()
-                            for m in models:
-                                popup.addItemWithTitle_(m)
-                            cur = panel_ref._cfg.get("ollama_model", "")
-                            if cur in models:
-                                popup.selectItemWithTitle_(cur)
-                    import threading
-                    threading.Timer(0, _upd).start()
-                threading.Thread(target=_do, daemon=True).start()
-
-        delegate = RefreshAction.alloc().init()
-        btn.setTarget_(delegate)
-        btn.setAction_(objc.selector(delegate.act, selector=b"act", signature=b"v@:"))
-        btn._refresh_delegate = delegate
-
-    def _setup_open_accessibility(self, btn: NSButton):
-        class OpenAction(objc.lookUpClass("NSObject")):
-            @objc.python_method
-            def act(self_inner):
-                subprocess.run([
-                    "open",
-                    "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-                ])
-
-        delegate = OpenAction.alloc().init()
-        btn.setTarget_(delegate)
-        btn.setAction_(objc.selector(delegate.act, selector=b"act", signature=b"v@:"))
-        btn._open_delegate = delegate
-
-    def _setup_save(self, btn: NSButton, win: NSWindow):
-        panel_ref = self
-
-        class SaveAction(objc.lookUpClass("NSObject")):
-            @objc.python_method
-            def act(self_inner):
-                panel_ref._collect_and_save()
-                win.performClose_(None)
-
-        delegate = SaveAction.alloc().init()
-        btn.setTarget_(delegate)
-        btn.setAction_(objc.selector(delegate.act, selector=b"act", signature=b"v@:"))
-        btn._save_delegate = delegate
-
-    def _collect_and_save(self):
+    def _collect(self):
         refs = self._refs
         cfg  = self._cfg
 
         # Whisper model
-        wm_popup  = refs.get("whisper_model_popup")
+        wm_popup  = refs.get("wm_popup")
         wm_labels = refs.get("_wm_labels", [])
         wm_repos  = refs.get("_wm_repos", [])
         if wm_popup and wm_labels and wm_repos:
@@ -661,10 +561,10 @@ class ConfigPanel:
             cfg["hotkey_mode"] = "toggle" if seg.selectedSegment() == 1 else "hold"
 
         # Default workflow
-        wf_popup  = refs.get("workflow_label")
+        wf_popup  = refs.get("wf_popup")
         wf_ids    = refs.get("_wf_ids", [])
         wf_labels = refs.get("_wf_labels", [])
-        if wf_popup and wf_ids:
+        if wf_popup and wf_ids and wf_labels:
             sel = wf_popup.titleOfSelectedItem() or ""
             if sel in wf_labels:
                 cfg["workflow"] = wf_ids[wf_labels.index(sel)]
@@ -678,53 +578,54 @@ class ConfigPanel:
                 cfg["tone_mejorar"]     = tone_vals[idx]
                 cfg["tone_profesional"] = tone_vals[idx]
 
-        # Custom prompts
-        for key in ("custom_prompt_mejorar", "custom_prompt_desahogo", "context_mejorar"):
+        # Text fields
+        for key in ("custom_prompt_mejorar", "context_mejorar", "custom_prompt_desahogo"):
             f = refs.get(key)
             if f:
                 cfg[key] = f.stringValue().strip()
 
         # Emoji density
-        density_seg  = refs.get("emoji_density_seg")
-        density_vals = refs.get("_density_vals", ["poca", "media", "mucha"])
-        if density_seg:
-            idx = density_seg.selectedSegment()
-            if 0 <= idx < len(density_vals):
-                cfg["emoji_density"] = density_vals[idx]
+        dseg  = refs.get("density_seg")
+        dvals = refs.get("_density_vals", ["poca", "media", "mucha"])
+        if dseg:
+            idx = dseg.selectedSegment()
+            if 0 <= idx < len(dvals):
+                cfg["emoji_density"] = dvals[idx]
 
-        # Terms from chips
-        if self._chips:
-            cfg["user_terms"] = self._chips.get_terms()
+        # Terms
+        cfg["user_terms"] = list(self._terms)
 
         # Ollama model
-        model_popup = refs.get("ollama_model")
-        if model_popup:
-            cfg["ollama_model"] = model_popup.titleOfSelectedItem() or ""
+        mp = refs.get("ollama_model")
+        if mp:
+            cfg["ollama_model"] = mp.titleOfSelectedItem() or ""
 
         # Ollama URL
-        url_f = refs.get("ollama_url")
-        if url_f:
-            val = url_f.stringValue().strip()
-            if val:
-                cfg["ollama_url"] = val
+        uf = refs.get("ollama_url")
+        if uf:
+            v = uf.stringValue().strip()
+            if v:
+                cfg["ollama_url"] = v
 
         # Ollama timeout
-        timeout_f = refs.get("ollama_timeout")
-        if timeout_f:
+        tf = refs.get("ollama_timeout")
+        if tf:
             try:
-                cfg["ollama_timeout"] = int(timeout_f.stringValue())
+                cfg["ollama_timeout"] = int(tf.stringValue())
             except ValueError:
                 pass
 
         self._on_save(cfg)
 
+    # ── Accessibility check ───────────────────────────────────────────────────
+
     @staticmethod
-    def _check_accessibility() -> bool:
+    def _ax_ok() -> bool:
         try:
-            ax = ctypes.cdll.LoadLibrary(
+            lib = ctypes.cdll.LoadLibrary(
                 "/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices"
             )
-            ax.AXIsProcessTrusted.restype = ctypes.c_bool
-            return bool(ax.AXIsProcessTrusted())
+            lib.AXIsProcessTrusted.restype = ctypes.c_bool
+            return bool(lib.AXIsProcessTrusted())
         except Exception:
             return False
