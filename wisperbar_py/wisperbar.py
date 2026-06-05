@@ -348,9 +348,6 @@ class WisperBar(rumps.App):
         self.btn_record  = rumps.MenuItem(t("menu_record", lg), callback=self.toggle)
         self.lbl_status  = rumps.MenuItem(t("status_loading", lg))
         self.lbl_ollama  = rumps.MenuItem(t("ollama_checking", lg))
-        self.btn_copy    = rumps.MenuItem(t("menu_copy", lg),  callback=self.copy)
-        self.btn_paste   = rumps.MenuItem(t("menu_paste", lg), callback=self.paste)
-        self.btn_clear   = rumps.MenuItem(t("menu_clear", lg), callback=self.clear)
 
         self.lang_items = []
         for flag, name, code in LANGUAGES:
@@ -383,10 +380,6 @@ class WisperBar(rumps.App):
             self.lbl_ollama,
             None,
             *self.workflow_items,
-            None,
-            self.btn_copy,
-            self.btn_paste,
-            self.btn_clear,
             None,
             *self.lang_items,
             None,
@@ -733,11 +726,7 @@ class WisperBar(rumps.App):
     # ── UI-Hilfe ──────────────────────────────────────────────────────────────
 
     def _refresh_actions(self):
-        lg  = self._ui_lang()
-        has = bool(self.transcript)
-        self.btn_copy.title  = t("menu_copy", lg)  if has else t("menu_copy", lg)  + "   —"
-        self.btn_paste.title = t("menu_paste", lg) if has else t("menu_paste", lg) + "   —"
-        self.btn_clear.title = t("menu_clear", lg) if has else t("menu_clear", lg) + "   —"
+        pass
 
 
 if __name__ == "__main__":
