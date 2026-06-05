@@ -32,7 +32,7 @@ from AppKit import (
     NSFloatingWindowLevel, NSStatusWindowLevel,
 )
 
-from ollama_service import OllamaService, OllamaError
+from llm_service import LLMService, LLMError, keychain_load, PROVIDER_LABELS
 from vocab import build_initial_prompt
 from workflows import (
     WORKFLOWS, WORKFLOW_BY_ID,
@@ -62,9 +62,19 @@ CONFIG_PATH = Path(__file__).parent / "config.json"
 CONFIG_DEFAULTS = {
     "workflow":               "transcribir",
     "language":               "auto",
+    # LLM provider selection
+    "llm_provider":           "ollama",
+    # Per-provider model + base URL (API keys go to Keychain, not here)
     "ollama_url":             "http://localhost:11434",
     "ollama_model":           "",
     "ollama_timeout":         60,
+    "anthropic_model":        "claude-sonnet-4-6",
+    "anthropic_base_url":     "",
+    "openai_model":           "gpt-4o",
+    "openai_base_url":        "",
+    "generic_model":          "",
+    "generic_base_url":       "",
+    # Other
     "user_terms":             [],
     "emoji_density":          "media",
     "whisper_model":          "mlx-community/whisper-large-v3-mlx",
@@ -307,22 +317,19 @@ class WisperBar(rumps.App):
         self._toggle_active = False
         self._overlay       = None
         self._main_q        = queue.Queue()
-        self._ollama        = OllamaService(
-            base_url=self._cfg.get("ollama_url", "http://localhost:11434"),
-            timeout=int(self._cfg.get("ollama_timeout", 60)),
-        )
-        self._ollama_ok     = False
-        self._ollama_model  = self._cfg.get("ollama_model", "")
+        self._llm           = LLMService(timeout=int(self._cfg.get("ollama_timeout", 60)))
+        self._llm_ok        = False
+        self._llm_model     = self._cfg.get("ollama_model", "")
+        self._llm_models: list[str] = []
         self._spinner_frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
         self._spinner_idx    = 0
         self._spinner_active = False
         self._spinner_ticks  = 0
         self._config_panel  = None
-        self._ollama_models  = []
 
         self._build_menu()
         threading.Thread(target=self._load_model, daemon=True).start()
-        threading.Thread(target=self._check_ollama, daemon=True).start()
+        threading.Thread(target=self._check_llm, daemon=True).start()
 
         try:
             self._listener = kb.Listener(
@@ -428,28 +435,47 @@ class WisperBar(rumps.App):
         self.model = True
         self.lbl_status.title = self._ready_status()
 
-    def _check_ollama(self):
-        models   = []
-        is_up    = False
+    def _get_llm_base_url(self, provider: str) -> str:
+        if provider == "ollama":
+            return self._cfg.get("ollama_url", "http://localhost:11434")
+        return self._cfg.get(f"{provider}_base_url", "")
+
+    def _get_llm_api_key(self, provider: str) -> str:
+        if provider == "ollama":
+            return ""
+        return keychain_load(f"{provider}_api_key")
+
+    def _get_llm_model(self, provider: str) -> str:
+        if provider == "ollama":
+            return self._cfg.get("ollama_model", "")
+        return self._cfg.get(f"{provider}_model", "")
+
+    def _check_llm(self):
+        provider = self._cfg.get("llm_provider", "ollama")
+        base_url = self._get_llm_base_url(provider)
+        api_key  = self._get_llm_api_key(provider)
+        is_up    = self._llm.is_available(provider, base_url, api_key)
+        models: list[str] = []
         try:
-            is_up  = self._ollama.is_running()
-            if is_up:
-                models = self._ollama.list_models()
-                if not self._ollama_model:
-                    self._ollama_model = self._ollama.default_model(models)
-                    self._cfg["ollama_model"] = self._ollama_model
-                    save_config(self._cfg)
+            models = self._llm.list_models(provider, base_url, api_key)
         except Exception:
             pass
-        self._ollama_ok     = is_up
-        self._ollama_models = models
-        self._main_q.put(lambda: self._update_ollama_label(is_up, models))
+        if not self._llm_model:
+            saved = self._get_llm_model(provider)
+            self._llm_model = saved or self._llm.default_model(provider, models)
+            key = "ollama_model" if provider == "ollama" else f"{provider}_model"
+            self._cfg[key] = self._llm_model
+            save_config(self._cfg)
+        self._llm_ok     = is_up
+        self._llm_models = models
+        self._main_q.put(lambda p=provider, u=is_up: self._update_llm_label(p, u))
 
-    def _update_ollama_label(self, is_up: bool, models: list[str]):
-        lg = self._ui_lang()
-        if is_up and self._ollama_model:
-            self.lbl_ollama.title = t("ollama_active", lg, model=self._ollama_model)
-        elif is_up:
+    def _update_llm_label(self, provider: str, ok: bool):
+        lg    = self._ui_lang()
+        plbl  = PROVIDER_LABELS.get(provider, provider)
+        if ok and self._llm_model:
+            self.lbl_ollama.title = f"🟢  {plbl}  •  {self._llm_model}"
+        elif ok:
             self.lbl_ollama.title = t("ollama_active_no_model", lg)
         else:
             self.lbl_ollama.title = t("ollama_inactive", lg)
@@ -562,9 +588,11 @@ class WisperBar(rumps.App):
         wf_def     = WORKFLOW_BY_ID.get(self._workflow_id)
         final_text = raw_text
         wf_icon    = wf_def.icon if wf_def else "📝"
-        ollama_ok  = False
 
-        if wf_def and wf_def.needs_ollama and self._ollama_ok and self._ollama_model:
+        if wf_def and wf_def.needs_ollama and self._llm_ok and self._llm_model:
+            provider        = self._cfg.get("llm_provider", "ollama")
+            base_url        = self._get_llm_base_url(provider)
+            api_key         = self._get_llm_api_key(provider)
             effective_lang  = self.lang_code if self.lang_code != "auto" else (detected or "es")
             emoji_density   = self._cfg.get("emoji_density", "media")
             tone_key        = f"tone_{self._workflow_id}" if self._workflow_id in ("mejorar", "profesional") else "tone_mejorar"
@@ -578,16 +606,16 @@ class WisperBar(rumps.App):
             proc_label      = get_processing_label(self._workflow_id, effective_lang)
             self._main_q.put(lambda lbl=proc_label: setattr(self.lbl_status, 'title', lbl))
             try:
-                final_text = self._ollama.chat(
-                    model=self._ollama_model,
-                    system=system_prompt,
-                    user=raw_text,
+                final_text = self._llm.chat(
+                    provider=provider, model=self._llm_model,
+                    base_url=base_url, api_key=api_key,
+                    system=system_prompt, user=raw_text,
                 )
-                ollama_ok = True
-            except OllamaError as exc:
-                print(f"[WisperBar] Ollama error: {exc}", flush=True)
-                self._main_q.put(lambda: setattr(
-                    self.lbl_ollama, 'title', "⚠️  Ollama no responde"
+            except LLMError as exc:
+                print(f"[WisperBar] LLM error: {exc}", flush=True)
+                plbl = PROVIDER_LABELS.get(provider, provider)
+                self._main_q.put(lambda p=plbl: setattr(
+                    self.lbl_ollama, 'title', f"⚠️  {p} no responde"
                 ))
 
         self.transcript = final_text
@@ -646,24 +674,22 @@ class WisperBar(rumps.App):
         if self._config_panel is None:
             self._config_panel = ConfigPanel(
                 cfg=self._cfg,
-                ollama_service=self._ollama,
+                llm_service=self._llm,
                 on_save=self._on_config_save,
                 lang_fn=self._ui_lang,
             )
-        self._config_panel.show(self._ollama_models)
+        self._config_panel.show(self._llm_models)
 
     def _on_config_save(self, new_cfg: dict):
-        self._cfg          = new_cfg
+        self._cfg         = new_cfg
         save_config(new_cfg)
-        self._workflow_id  = new_cfg.get("workflow", "transcribir")
-        self._ollama_model = new_cfg.get("ollama_model", "")
-        self._ollama = OllamaService(
-            base_url=new_cfg.get("ollama_url", "http://localhost:11434"),
-            timeout=int(new_cfg.get("ollama_timeout", 60)),
-        )
+        self._workflow_id = new_cfg.get("workflow", "transcribir")
+        self._llm         = LLMService(timeout=int(new_cfg.get("ollama_timeout", 60)))
+        provider          = new_cfg.get("llm_provider", "ollama")
+        self._llm_model   = self._get_llm_model(provider)
         for item in self.workflow_items:
             item.state = (item._workflow_id == self._workflow_id)
-        threading.Thread(target=self._check_ollama, daemon=True).start()
+        threading.Thread(target=self._check_llm, daemon=True).start()
 
     # ── Spinner ───────────────────────────────────────────────────────────────
 

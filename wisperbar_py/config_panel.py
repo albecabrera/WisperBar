@@ -4,7 +4,7 @@ import subprocess
 import threading
 import objc
 from AppKit import (
-    NSWindow, NSView, NSScrollView, NSTextField, NSButton,
+    NSWindow, NSView, NSScrollView, NSTextField, NSSecureTextField, NSButton,
     NSPopUpButton, NSSegmentedControl, NSTabView, NSTabViewItem,
     NSWindowStyleMaskTitled, NSWindowStyleMaskClosable,
     NSWindowStyleMaskResizable, NSBackingStoreBuffered,
@@ -13,6 +13,11 @@ from AppKit import (
 )
 from i18n import t
 from workflows import WORKFLOWS
+from llm_service import (
+    keychain_save, keychain_load,
+    ANTHROPIC_MODELS_FALLBACK, OPENAI_MODELS_FALLBACK,
+    PROVIDERS,
+)
 
 PANEL_W   = 520
 PANEL_H   = 700
@@ -171,9 +176,9 @@ def _scroll(content, frame):
 
 class ConfigPanel:
 
-    def __init__(self, cfg, ollama_service, on_save, lang_fn):
+    def __init__(self, cfg, llm_service, on_save, lang_fn):
         self._cfg        = cfg
-        self._ollama     = ollama_service
+        self._llm        = llm_service
         self._on_save    = on_save
         self._lang_fn    = lang_fn
         self._win        = None
@@ -433,10 +438,10 @@ class ConfigPanel:
     # ── Tab 2: Acceso ─────────────────────────────────────────────────────────
 
     def _tab_access(self, lg: str, models: list[str]) -> NSView:
-        cw   = PANEL_W - 24
-        keep = self._delegates
-        tab  = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, cw, TAB_H))
-        y    = TAB_H - 16
+        cw    = PANEL_W - 24
+        keep  = self._delegates
+        tab   = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, cw, TAB_H + 200))
+        y     = TAB_H + 200 - 16
 
         def gap(n=10): nonlocal y; y -= n
 
@@ -446,31 +451,101 @@ class ConfigPanel:
             _sec(tab, t(key, lg), y, cw)
             y -= 6
 
-        # ── Ollama ────────────────────────────────────────────────────────────
-        sec("sec_ollama")
+        # ── Proveedor ─────────────────────────────────────────────────────────
+        sec("sec_provider")
 
-        model_items = models if models else [self._cfg.get("ollama_model", "") or "—"]
-        cur_model   = self._cfg.get("ollama_model", "")
+        cur_provider = self._cfg.get("llm_provider", "ollama")
+        provider_labels = [
+            t("provider_ollama", lg),
+            t("provider_anthropic", lg),
+            t("provider_openai", lg),
+            t("provider_generic", lg),
+        ]
+        cur_pidx = PROVIDERS.index(cur_provider) if cur_provider in PROVIDERS else 0
+
+        y -= 28
+        _seg(tab, 20, y, cw - 40, provider_labels, cur_pidx, "provider_seg", self._refs)
+        self._refs["_providers"] = PROVIDERS
+
+        gap(22)
+
+        # ── Modelo y conexión ─────────────────────────────────────────────────
+        sec("sec_llm_conn")
+
+        # Build initial model list for current provider
+        if cur_provider == "ollama":
+            init_models = models if models else [self._cfg.get("ollama_model", "") or "—"]
+            cur_model   = self._cfg.get("ollama_model", "")
+        elif cur_provider == "anthropic":
+            init_models = list(ANTHROPIC_MODELS_FALLBACK)
+            cur_model   = self._cfg.get("anthropic_model", "claude-sonnet-4-6")
+        elif cur_provider == "openai":
+            init_models = list(OPENAI_MODELS_FALLBACK)
+            cur_model   = self._cfg.get("openai_model", "gpt-4o")
+        else:
+            init_models = [self._cfg.get("generic_model", "")] if self._cfg.get("generic_model") else ["—"]
+            cur_model   = self._cfg.get("generic_model", "")
 
         y -= 28
         _lbl(tab, t("lbl_model", lg), 20, y + 4, 110)
-        _popup(tab, 136, y, 236, model_items, cur_model, "ollama_model", self._refs)
+        _popup(tab, 136, y, 234, init_models, cur_model, "llm_model_popup", self._refs)
         _btn(tab, cw - 106, y - 1, 88, 28, t("btn_refresh", lg),
              "btn_refresh", self._refs,
              action=self._refresh_models, keep=keep)
 
         y -= 34
-        _lbl(tab, t("lbl_url", lg), 20, y + 4, 110)
-        _field(tab, 136, y, cw - 156,
-               "http://localhost:11434",
-               self._cfg.get("ollama_url", "http://localhost:11434"),
-               "ollama_url", self._refs)
+        _lbl(tab, t("lbl_base_url", lg), 20, y + 4, 110)
+        if cur_provider == "ollama":
+            url_val = self._cfg.get("ollama_url", "http://localhost:11434")
+            url_ph  = "http://localhost:11434"
+        elif cur_provider == "anthropic":
+            url_val = self._cfg.get("anthropic_base_url", "")
+            url_ph  = "https://api.anthropic.com"
+        elif cur_provider == "openai":
+            url_val = self._cfg.get("openai_base_url", "")
+            url_ph  = "https://api.openai.com"
+        else:
+            url_val = self._cfg.get("generic_base_url", "")
+            url_ph  = "https://your-api.example.com/v1"
+        _field(tab, 136, y, cw - 156, url_ph, url_val, "llm_base_url", self._refs)
 
+        # Timeout (Ollama only — shown for all but label makes it clear)
         y -= 34
         _lbl(tab, t("lbl_timeout", lg), 20, y + 4, 110)
         _field(tab, 136, y, 80, "60",
                str(self._cfg.get("ollama_timeout", 60)),
                "ollama_timeout", self._refs)
+
+        gap(22)
+
+        # ── API Key ───────────────────────────────────────────────────────────
+        sec("sec_api_key")
+
+        y -= 22
+        _lbl(tab, t("lbl_api_key", lg), 20, y + 4, 110)
+        api_f = NSSecureTextField.alloc().initWithFrame_(NSMakeRect(136, y, cw - 156, 24))
+        api_f.setPlaceholderString_("sk-…")
+        api_f.setFont_(NSFont.systemFontOfSize_(12))
+        tab.addSubview_(api_f)
+        self._refs["api_key_field"] = api_f
+
+        # Status: is a key already saved in Keychain?
+        y -= 22
+        existing_key = keychain_load(f"{cur_provider}_api_key") if cur_provider != "ollama" else ""
+        key_status_txt = t("key_present", lg) if existing_key else t("key_absent", lg)
+        key_status = _lbl(tab, key_status_txt, 136, y, cw - 156, small=True)
+        key_status.setTextColor_(
+            NSColor.systemGreenColor() if existing_key else NSColor.secondaryLabelColor()
+        )
+        self._refs["_key_status_lbl"] = key_status
+
+        y -= 30
+        _btn(tab, 136, y, 180, 26, t("btn_save_key", lg),
+             "btn_save_key", self._refs,
+             action=lambda: self._save_api_key(lg), keep=keep)
+        _btn(tab, 322, y, 80, 26, t("key_clear", lg),
+             "btn_clear_key", self._refs,
+             action=lambda: self._clear_api_key(lg), keep=keep)
 
         gap(30)
 
@@ -496,7 +571,7 @@ class ConfigPanel:
                  ]),
                  keep=keep)
 
-        return tab
+        return _scroll(tab, NSMakeRect(0, 0, PANEL_W - 24, TAB_H))
 
     # ── Chips ─────────────────────────────────────────────────────────────────
 
@@ -544,17 +619,61 @@ class ConfigPanel:
             self._terms.remove(term)
             self._render_chips(lg)
 
-    # ── Ollama refresh ────────────────────────────────────────────────────────
+    # ── API key actions ───────────────────────────────────────────────────────
+
+    def _save_api_key(self, lg: str):
+        field    = self._refs.get("api_key_field")
+        st_lbl   = self._refs.get("_key_status_lbl")
+        seg      = self._refs.get("provider_seg")
+        providers = self._refs.get("_providers", PROVIDERS)
+        provider = providers[seg.selectedSegment()] if seg else "ollama"
+        if field is None or provider == "ollama":
+            return
+        key = field.stringValue().strip()
+        if key:
+            ok = keychain_save(f"{provider}_api_key", key)
+            if st_lbl:
+                st_lbl.setStringValue_(t("key_saved" if ok else "key_absent", lg))
+                st_lbl.setTextColor_(NSColor.systemGreenColor() if ok else NSColor.systemRedColor())
+            field.setStringValue_("")
+
+    def _clear_api_key(self, lg: str):
+        from llm_service import keychain_delete
+        seg       = self._refs.get("provider_seg")
+        providers = self._refs.get("_providers", PROVIDERS)
+        provider  = providers[seg.selectedSegment()] if seg else "ollama"
+        st_lbl    = self._refs.get("_key_status_lbl")
+        if provider == "ollama":
+            return
+        keychain_delete(f"{provider}_api_key")
+        if st_lbl:
+            st_lbl.setStringValue_(t("key_absent", lg))
+            st_lbl.setTextColor_(NSColor.secondaryLabelColor())
+
+    # ── LLM model refresh ─────────────────────────────────────────────────────
 
     def _refresh_models(self):
+        seg       = self._refs.get("provider_seg")
+        providers = self._refs.get("_providers", PROVIDERS)
+        provider  = providers[seg.selectedSegment()] if seg else "ollama"
+
+        base_url_f = self._refs.get("llm_base_url")
+        base_url   = (base_url_f.stringValue().strip() if base_url_f else "") or ""
+
+        api_key_f  = self._refs.get("api_key_field")
+        field_key  = api_key_f.stringValue().strip() if api_key_f else ""
+        api_key    = field_key or keychain_load(f"{provider}_api_key")
+
         def _fetch():
-            models = self._ollama.list_models()
-            popup  = self._refs.get("ollama_model")
+            models = self._llm.list_models(provider, base_url, api_key)
+            popup  = self._refs.get("llm_model_popup")
             if popup and models:
                 popup.removeAllItems()
                 for m in models:
                     popup.addItemWithTitle_(m)
-                cur = self._cfg.get("ollama_model", "")
+                cur = self._cfg.get(
+                    "ollama_model" if provider == "ollama" else f"{provider}_model", ""
+                )
                 if cur in models:
                     popup.selectItemWithTitle_(cur)
         threading.Thread(target=_fetch, daemon=True).start()
@@ -564,6 +683,38 @@ class ConfigPanel:
     def _collect(self):
         refs = self._refs
         cfg  = self._cfg
+
+        # LLM provider
+        provider_seg = refs.get("provider_seg")
+        providers    = refs.get("_providers", PROVIDERS)
+        provider     = providers[provider_seg.selectedSegment()] if provider_seg else "ollama"
+        cfg["llm_provider"] = provider
+
+        # LLM model (stored per-provider key)
+        model_popup = refs.get("llm_model_popup")
+        if model_popup:
+            model = model_popup.titleOfSelectedItem() or ""
+            if provider == "ollama":
+                cfg["ollama_model"] = model
+            else:
+                cfg[f"{provider}_model"] = model
+
+        # LLM base URL (stored per-provider key)
+        base_url_f = refs.get("llm_base_url")
+        if base_url_f:
+            url = base_url_f.stringValue().strip()
+            if provider == "ollama":
+                cfg["ollama_url"] = url or "http://localhost:11434"
+            else:
+                cfg[f"{provider}_base_url"] = url
+
+        # API key → Keychain only (not config.json), triggered by Save Key button
+        # If user typed a key and didn't click Save Key, save it now
+        api_key_f = refs.get("api_key_field")
+        if api_key_f and provider != "ollama":
+            key = api_key_f.stringValue().strip()
+            if key:
+                keychain_save(f"{provider}_api_key", key)
 
         # Whisper model
         wm_popup  = refs.get("wm_popup")
@@ -614,19 +765,7 @@ class ConfigPanel:
         # Terms from chips
         cfg["user_terms"] = list(self._terms)
 
-        # Ollama model
-        mp = refs.get("ollama_model")
-        if mp:
-            cfg["ollama_model"] = mp.titleOfSelectedItem() or ""
-
-        # Ollama URL
-        uf = refs.get("ollama_url")
-        if uf:
-            v = uf.stringValue().strip()
-            if v:
-                cfg["ollama_url"] = v
-
-        # Ollama timeout
+        # Ollama timeout (shared field)
         tf = refs.get("ollama_timeout")
         if tf:
             try:
