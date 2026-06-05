@@ -733,4 +733,8 @@ class WisperBar(rumps.App):
 
 if __name__ == "__main__":
     _acquire_lock()
+    # Registro LaunchAgent en primer arranque (idempotente)
+    from autostart import is_registered, register
+    if not is_registered():
+        register()
     WisperBar().run()
