@@ -39,6 +39,7 @@ from workflows import (
     get_system_prompt, get_processing_label, workflow_menu_label,
 )
 from config_panel import ConfigPanel
+from i18n import t
 
 # ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -59,13 +60,20 @@ LANGUAGES   = [
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
 CONFIG_DEFAULTS = {
-    "workflow":       "transcribir",
-    "language":       "auto",
-    "ollama_url":     "http://localhost:11434",
-    "ollama_model":   "",
-    "ollama_timeout": 60,
-    "user_terms":     [],
-    "emoji_density":  "media",
+    "workflow":               "transcribir",
+    "language":               "auto",
+    "ollama_url":             "http://localhost:11434",
+    "ollama_model":           "",
+    "ollama_timeout":         60,
+    "user_terms":             [],
+    "emoji_density":          "media",
+    "hotkey_mode":            "hold",
+    "tone_mejorar":           "neutral",
+    "tone_profesional":       "neutral",
+    "custom_prompt_mejorar":  "",
+    "custom_prompt_profesional": "",
+    "custom_prompt_desahogo": "",
+    "context_mejorar":        "",
 }
 
 _lock_fd = None
@@ -295,6 +303,7 @@ class WisperBar(rumps.App):
         self.model          = None
         self._levels        = deque([0.0] * BAR_COUNT, maxlen=BAR_COUNT)
         self._fn_held       = False
+        self._toggle_active = False
         self._overlay       = None
         self._main_q        = queue.Queue()
         self._ollama        = OllamaService(
@@ -327,12 +336,13 @@ class WisperBar(rumps.App):
     # ── Menü ──────────────────────────────────────────────────────────────────
 
     def _build_menu(self):
-        self.btn_record  = rumps.MenuItem("⏺  Grabar", callback=self.toggle)
-        self.lbl_status  = rumps.MenuItem("⏳  Cargando modelo…")
-        self.lbl_ollama  = rumps.MenuItem("⏳  Ollama: comprobando…")
-        self.btn_copy    = rumps.MenuItem("  Copiar",   callback=self.copy)
-        self.btn_paste   = rumps.MenuItem("  Pegar",    callback=self.paste)
-        self.btn_clear   = rumps.MenuItem("  Limpiar",  callback=self.clear)
+        lg = self._ui_lang()
+        self.btn_record  = rumps.MenuItem(t("menu_record", lg), callback=self.toggle)
+        self.lbl_status  = rumps.MenuItem(t("status_loading", lg))
+        self.lbl_ollama  = rumps.MenuItem(t("ollama_checking", lg))
+        self.btn_copy    = rumps.MenuItem(t("menu_copy", lg),  callback=self.copy)
+        self.btn_paste   = rumps.MenuItem(t("menu_paste", lg), callback=self.paste)
+        self.btn_clear   = rumps.MenuItem(t("menu_clear", lg), callback=self.clear)
 
         self.lang_items = []
         for flag, name, code in LANGUAGES:
@@ -344,7 +354,7 @@ class WisperBar(rumps.App):
         self.workflow_items = []
         for wf in WORKFLOWS:
             item = rumps.MenuItem(
-                workflow_menu_label(wf, self._ui_lang()),
+                workflow_menu_label(wf, lg),
                 callback=self._set_workflow,
             )
             item._workflow_id = wf.id
@@ -353,7 +363,7 @@ class WisperBar(rumps.App):
 
         self.lbl_version = rumps.MenuItem(f"WisperBar v{APP_VERSION}  •  build {APP_BUILD}")
 
-        self.btn_config = rumps.MenuItem("⚙️  Configuración…", callback=self._open_config)
+        self.btn_config = rumps.MenuItem(t("menu_config", lg), callback=self._open_config)
 
         self.menu = [
             self.lbl_version,
@@ -372,7 +382,7 @@ class WisperBar(rumps.App):
             *self.lang_items,
             None,
             self.btn_config,
-            rumps.MenuItem("Salir", callback=lambda _: rumps.quit_application()),
+            rumps.MenuItem(t("menu_quit", lg), callback=lambda _: rumps.quit_application()),
         ]
         self._refresh_actions()
 
@@ -408,9 +418,14 @@ class WisperBar(rumps.App):
 
     # ── Modell + Ollama laden ─────────────────────────────────────────────────
 
+    def _ready_status(self) -> str:
+        lg   = self._ui_lang()
+        mode = self._cfg.get("hotkey_mode", "hold")
+        return t("status_ready_hold" if mode == "hold" else "status_ready_toggle", lg)
+
     def _load_model(self):
         self.model = True
-        self.lbl_status.title = "✅  Listo  —  mantener ⌥"
+        self.lbl_status.title = self._ready_status()
 
     def _check_ollama(self):
         models   = []
@@ -430,12 +445,13 @@ class WisperBar(rumps.App):
         self._main_q.put(lambda: self._update_ollama_label(is_up, models))
 
     def _update_ollama_label(self, is_up: bool, models: list[str]):
+        lg = self._ui_lang()
         if is_up and self._ollama_model:
-            self.lbl_ollama.title = f"🟢  Ollama  •  {self._ollama_model}"
+            self.lbl_ollama.title = t("ollama_active", lg, model=self._ollama_model)
         elif is_up:
-            self.lbl_ollama.title = "🟢  Ollama activo (sin modelo)"
+            self.lbl_ollama.title = t("ollama_active_no_model", lg)
         else:
-            self.lbl_ollama.title = "🔴  Ollama no detectado"
+            self.lbl_ollama.title = t("ollama_inactive", lg)
 
     # ── Aufnahme ──────────────────────────────────────────────────────────────
 
@@ -449,13 +465,14 @@ class WisperBar(rumps.App):
             self._start()
 
     def _start(self):
+        lg                    = self._ui_lang()
         self.recording        = True
         self.frames           = []
         self.transcript       = ""
         self._levels          = deque([0.0] * BAR_COUNT, maxlen=BAR_COUNT)
         pyperclip.copy("")
-        self.btn_record.title = "⏹  Parar"
-        self.lbl_status.title = "●  Grabando…"
+        self.btn_record.title = t("menu_stop", lg)
+        self.lbl_status.title = t("status_recording", lg)
         self._refresh_actions()
         if self._overlay is None:
             self._overlay = WaveformOverlay()
@@ -486,9 +503,11 @@ class WisperBar(rumps.App):
         )
 
     def _stop(self):
+        lg                    = self._ui_lang()
         self.recording        = False
-        self.btn_record.title = "⏺  Grabar"
-        self.lbl_status.title = "⏳  Transcribiendo…"
+        self._toggle_active   = False
+        self.btn_record.title = t("menu_record", lg)
+        self.lbl_status.title = t("status_transcribing", lg)
         if self._overlay:
             self._overlay.set_mode("processing")
         self._start_spinner()
@@ -512,7 +531,7 @@ class WisperBar(rumps.App):
             self._stop_spinner()
             if self._overlay:
                 self._main_q.put(self._overlay.hide)
-            self.lbl_status.title = "✅  Listo  —  mantener ⌥"
+            self.lbl_status.title = self._ready_status()
             return
 
         silence    = np.zeros(SAMPLE_RATE * 3, dtype=np.float32)
@@ -534,7 +553,7 @@ class WisperBar(rumps.App):
             self._stop_spinner()
             if self._overlay:
                 self._main_q.put(self._overlay.hide)
-            self.lbl_status.title = "✅  Listo  —  mantener ⌥"
+            self.lbl_status.title = self._ready_status()
             return
 
         # Fase 2: Ollama (si workflow lo requiere)
@@ -544,10 +563,17 @@ class WisperBar(rumps.App):
         ollama_ok  = False
 
         if wf_def and wf_def.needs_ollama and self._ollama_ok and self._ollama_model:
-            effective_lang = self.lang_code if self.lang_code != "auto" else (detected or "es")
-            emoji_density  = self._cfg.get("emoji_density", "media")
-            system_prompt  = get_system_prompt(self._workflow_id, effective_lang, emoji_density)
-            proc_label     = get_processing_label(self._workflow_id, effective_lang)
+            effective_lang  = self.lang_code if self.lang_code != "auto" else (detected or "es")
+            emoji_density   = self._cfg.get("emoji_density", "media")
+            tone_key        = f"tone_{self._workflow_id}" if self._workflow_id in ("mejorar", "profesional") else "tone_mejorar"
+            tone            = self._cfg.get(tone_key, "neutral")
+            custom_prompt   = self._cfg.get(f"custom_prompt_{self._workflow_id}", "")
+            context         = self._cfg.get("context_mejorar", "") if self._workflow_id == "mejorar" else ""
+            system_prompt   = get_system_prompt(
+                self._workflow_id, effective_lang, emoji_density,
+                tone=tone, custom_prompt=custom_prompt, context=context,
+            )
+            proc_label      = get_processing_label(self._workflow_id, effective_lang)
             self._main_q.put(lambda lbl=proc_label: setattr(self.lbl_status, 'title', lbl))
             try:
                 final_text = self._ollama.chat(
@@ -580,7 +606,7 @@ class WisperBar(rumps.App):
 
     def clear(self, _=None):
         self.transcript = ""
-        self.lbl_status.title = "✅  Listo  —  mantener ⌥"
+        self.lbl_status.title = self._ready_status()
         self._refresh_actions()
 
     def _paste_to_active_app(self):
@@ -620,6 +646,7 @@ class WisperBar(rumps.App):
                 cfg=self._cfg,
                 ollama_service=self._ollama,
                 on_save=self._on_config_save,
+                lang_fn=self._ui_lang,
             )
         self._config_panel.show(self._ollama_models)
 
@@ -647,16 +674,29 @@ class WisperBar(rumps.App):
         self._spinner_active = False
         self.title = "🎤"
 
-    # ── Right Option PTT ──────────────────────────────────────────────────────
+    # ── Right Option PTT / Toggle ─────────────────────────────────────────────
 
     def _key_press(self, key):
-        if key == kb.Key.alt_r and not self._fn_held:
-            self._fn_held = True
-            if self.model and not self.recording:
-                self._main_q.put(self._start)
+        mode = self._cfg.get("hotkey_mode", "hold")
+        if key == kb.Key.alt_r:
+            if mode == "hold":
+                if not self._fn_held:
+                    self._fn_held = True
+                    if self.model and not self.recording:
+                        self._main_q.put(self._start)
+            else:  # toggle
+                if not self.recording:
+                    if self.model:
+                        self._toggle_active = True
+                        self._main_q.put(self._start)
+                else:
+                    self._main_q.put(self._stop)
+        elif key == kb.Key.esc and mode == "toggle" and self.recording:
+            self._main_q.put(self._stop)
 
     def _key_release(self, key):
-        if key == kb.Key.alt_r:
+        mode = self._cfg.get("hotkey_mode", "hold")
+        if key == kb.Key.alt_r and mode == "hold":
             self._fn_held = False
             if self.recording:
                 self._main_q.put(self._stop)
@@ -664,10 +704,11 @@ class WisperBar(rumps.App):
     # ── UI-Hilfe ──────────────────────────────────────────────────────────────
 
     def _refresh_actions(self):
+        lg  = self._ui_lang()
         has = bool(self.transcript)
-        self.btn_copy.title  = "  Kopieren" if has else "  Kopieren   (kein Text)"
-        self.btn_paste.title = "  Einfügen" if has else "  Einfügen   (kein Text)"
-        self.btn_clear.title = "  Löschen"  if has else "  Löschen    (kein Text)"
+        self.btn_copy.title  = t("menu_copy", lg)  if has else t("menu_copy", lg)  + "   —"
+        self.btn_paste.title = t("menu_paste", lg) if has else t("menu_paste", lg) + "   —"
+        self.btn_clear.title = t("menu_clear", lg) if has else t("menu_clear", lg) + "   —"
 
 
 if __name__ == "__main__":

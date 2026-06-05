@@ -154,15 +154,16 @@ _PROCESSING_LABELS: dict[str, dict[str, str]] = {
 
 @dataclass
 class WorkflowDef:
-    id:          str
-    icon:        str
-    label_es:    str
-    label_en:    str
-    label_de:    str
+    id:             str
+    icon:           str
+    label_es:       str
+    label_en:       str
+    label_de:       str
     description_es: str
     description_en: str
     description_de: str
-    needs_ollama: bool
+    needs_ollama:   bool
+    hotkey_label:   str = "⌥ derecho"
 
 
 WORKFLOWS: list[WorkflowDef] = [
@@ -176,6 +177,7 @@ WORKFLOWS: list[WorkflowDef] = [
         description_en="Raw text, no post-processing",
         description_de="Rohtext, ohne Nachbearbeitung",
         needs_ollama=False,
+        hotkey_label="⌥R",
     ),
     WorkflowDef(
         id="mejorar",
@@ -187,6 +189,7 @@ WORKFLOWS: list[WorkflowDef] = [
         description_en="Fixes grammar and improves flow",
         description_de="Grammatik korrigieren und Lesefluss verbessern",
         needs_ollama=True,
+        hotkey_label="⌥R",
     ),
     WorkflowDef(
         id="profesional",
@@ -198,6 +201,7 @@ WORKFLOWS: list[WorkflowDef] = [
         description_en="Rewrites in formal/corporate tone",
         description_de="In formellen Ton umformulieren",
         needs_ollama=True,
+        hotkey_label="⌥R",
     ),
     WorkflowDef(
         id="desahogo",
@@ -209,6 +213,7 @@ WORKFLOWS: list[WorkflowDef] = [
         description_en="Frustration → respectful message",
         description_de="Frust → respektvolle Nachricht",
         needs_ollama=True,
+        hotkey_label="⌥R",
     ),
     WorkflowDef(
         id="emoji",
@@ -220,22 +225,66 @@ WORKFLOWS: list[WorkflowDef] = [
         description_en="Adds contextual emojis",
         description_de="Passende Emojis hinzufügen",
         needs_ollama=True,
+        hotkey_label="⌥R",
     ),
 ]
 
 WORKFLOW_BY_ID: dict[str, WorkflowDef] = {w.id: w for w in WORKFLOWS}
 
 
-def get_system_prompt(workflow_id: str, lang: str, emoji_density: str = "media") -> str:
+_TONE_ADDENDUM: dict[str, dict[str, str]] = {
+    "formal": {
+        "es": "\nUsa un tono formal y profesional.",
+        "en": "\nUse a formal and professional tone.",
+        "de": "\nVerwende einen formellen und professionellen Ton.",
+    },
+    "neutral": {
+        "es": "\nUsa un tono neutral y claro.",
+        "en": "\nUse a neutral and clear tone.",
+        "de": "\nVerwende einen neutralen und klaren Ton.",
+    },
+    "casual": {
+        "es": "\nUsa un tono cercano y natural.",
+        "en": "\nUse a casual and natural tone.",
+        "de": "\nVerwende einen lockeren und natürlichen Ton.",
+    },
+}
+
+
+def get_system_prompt(
+    workflow_id: str,
+    lang: str,
+    emoji_density: str = "media",
+    tone: str = "neutral",
+    custom_prompt: str = "",
+    context: str = "",
+) -> str:
     if workflow_id == "transcribir":
         return ""
+
+    # Custom prompt overrides entirely (like BlitzText)
+    if custom_prompt.strip():
+        base = custom_prompt.strip()
+        if context.strip() and workflow_id in ("mejorar", "profesional"):
+            base += f"\n\nContexto: {context.strip()}"
+        return base
+
     prompts = _PROMPTS.get(workflow_id, {})
     effective_lang = lang if lang in prompts else "en"
     prompt = prompts.get(effective_lang, "")
+
     if workflow_id == "emoji":
         density_map = _EMOJI_DENSITY.get(emoji_density, _EMOJI_DENSITY["media"])
-        density_str = density_map.get(effective_lang, density_map["en"])
+        density_str = density_map.get(effective_lang, density_map.get("en", ""))
         prompt = prompt.replace("{density}", density_str)
+
+    if workflow_id in ("mejorar", "profesional") and tone in _TONE_ADDENDUM:
+        addendum = _TONE_ADDENDUM[tone].get(effective_lang, _TONE_ADDENDUM[tone]["en"])
+        prompt += addendum
+
+    if context.strip() and workflow_id in ("mejorar", "profesional"):
+        prompt += f"\n\nContexto: {context.strip()}"
+
     return prompt
 
 
