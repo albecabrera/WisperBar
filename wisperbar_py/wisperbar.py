@@ -5,12 +5,16 @@ PTT-Shortcut: Right Option (⌥) halten → aufnehmen, loslassen → transkribie
 """
 
 import fcntl
+import json
+import os
 import sys
 import threading
 import time
 import subprocess
 import queue
 from collections import deque
+from pathlib import Path
+
 import numpy as np
 import sounddevice as sd
 import pyperclip
@@ -28,7 +32,10 @@ from AppKit import (
     NSFloatingWindowLevel, NSStatusWindowLevel,
 )
 
-import os
+from ollama_service import OllamaService, OllamaError
+from vocab import build_initial_prompt
+
+# ── Constantes ────────────────────────────────────────────────────────────────
 
 SAMPLE_RATE = 16_000
 MODEL_REPO  = "mlx-community/whisper-large-v3-mlx"
@@ -37,7 +44,7 @@ APP_VERSION = os.environ.get("WISPERBAR_VERSION", "dev")
 APP_BUILD   = os.environ.get("WISPERBAR_BUILD", "0")
 BARS        = " ▁▂▃▄▅▆▇█"
 BAR_COUNT   = 28
-BLOCK_SIZE  = 512   # 32 ms per callback — rápido para la animación
+BLOCK_SIZE  = 512
 LANGUAGES   = [
     ("🌐", "Auto-detect", "auto"),
     ("🇩🇪", "Deutsch",    "de"),
@@ -45,7 +52,40 @@ LANGUAGES   = [
     ("🇪🇸", "Español",    "es"),
 ]
 
+CONFIG_PATH = Path(__file__).parent / "config.json"
+CONFIG_DEFAULTS = {
+    "workflow":       "transcribir",
+    "language":       "auto",
+    "ollama_url":     "http://localhost:11434",
+    "ollama_model":   "",
+    "ollama_timeout": 60,
+    "user_terms":     [],
+}
+
 _lock_fd = None
+
+
+# ── Config ────────────────────────────────────────────────────────────────────
+
+def load_config() -> dict:
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH) as f:
+                data = json.load(f)
+            merged = {**CONFIG_DEFAULTS, **data}
+            return merged
+        except Exception:
+            pass
+    return dict(CONFIG_DEFAULTS)
+
+
+def save_config(cfg: dict) -> None:
+    try:
+        with open(CONFIG_PATH, "w") as f:
+            json.dump(cfg, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+    except Exception as exc:
+        print(f"[WisperBar] config save error: {exc}", flush=True)
 
 
 def _acquire_lock():
@@ -185,18 +225,26 @@ class WisperBar(rumps.App):
     def __init__(self):
         super().__init__("🎤", quit_button=None)
 
-        self.recording  = False
-        self.frames     = []
-        self.transcript = ""
-        self.lang_code  = "auto"
-        self.model      = None
-        self._levels    = deque([0.0] * BAR_COUNT, maxlen=BAR_COUNT)
-        self._fn_held   = False
-        self._overlay   = None
-        self._main_q    = queue.Queue()
+        self._cfg           = load_config()
+        self.recording      = False
+        self.frames         = []
+        self.transcript     = ""
+        self.lang_code      = self._cfg.get("language", "auto")
+        self.model          = None
+        self._levels        = deque([0.0] * BAR_COUNT, maxlen=BAR_COUNT)
+        self._fn_held       = False
+        self._overlay       = None
+        self._main_q        = queue.Queue()
+        self._ollama        = OllamaService(
+            base_url=self._cfg.get("ollama_url", "http://localhost:11434"),
+            timeout=int(self._cfg.get("ollama_timeout", 60)),
+        )
+        self._ollama_ok     = False
+        self._ollama_model  = self._cfg.get("ollama_model", "")
 
         self._build_menu()
         threading.Thread(target=self._load_model, daemon=True).start()
+        threading.Thread(target=self._check_ollama, daemon=True).start()
 
         try:
             self._listener = kb.Listener(
@@ -211,11 +259,12 @@ class WisperBar(rumps.App):
     # ── Menü ──────────────────────────────────────────────────────────────────
 
     def _build_menu(self):
-        self.btn_record = rumps.MenuItem("⏺  Aufnehmen", callback=self.toggle)
-        self.lbl_status = rumps.MenuItem("⏳  Modell wird geladen…")
-        self.btn_copy   = rumps.MenuItem("  Kopieren",  callback=self.copy)
-        self.btn_paste  = rumps.MenuItem("  Einfügen",  callback=self.paste)
-        self.btn_clear  = rumps.MenuItem("  Löschen",   callback=self.clear)
+        self.btn_record  = rumps.MenuItem("⏺  Aufnehmen", callback=self.toggle)
+        self.lbl_status  = rumps.MenuItem("⏳  Modell wird geladen…")
+        self.lbl_ollama  = rumps.MenuItem("⏳  Ollama: comprobando…")
+        self.btn_copy    = rumps.MenuItem("  Kopieren",  callback=self.copy)
+        self.btn_paste   = rumps.MenuItem("  Einfügen",  callback=self.paste)
+        self.btn_clear   = rumps.MenuItem("  Löschen",   callback=self.clear)
 
         self.lang_items = []
         for flag, name, code in LANGUAGES:
@@ -232,6 +281,7 @@ class WisperBar(rumps.App):
             self.btn_record,
             None,
             self.lbl_status,
+            self.lbl_ollama,
             None,
             self.btn_copy,
             self.btn_paste,
@@ -258,11 +308,35 @@ class WisperBar(rumps.App):
         if self.recording and self._overlay:
             self._overlay.update(self._levels)
 
-    # ── Modell laden ──────────────────────────────────────────────────────────
+    # ── Modell + Ollama laden ─────────────────────────────────────────────────
 
     def _load_model(self):
         self.model = True
         self.lbl_status.title = "✅  Bereit  –  mantener ⌥ izquierdo"
+
+    def _check_ollama(self):
+        models   = []
+        is_up    = False
+        try:
+            is_up  = self._ollama.is_running()
+            if is_up:
+                models = self._ollama.list_models()
+                if not self._ollama_model:
+                    self._ollama_model = self._ollama.default_model(models)
+                    self._cfg["ollama_model"] = self._ollama_model
+                    save_config(self._cfg)
+        except Exception:
+            pass
+        self._ollama_ok = is_up
+        self._main_q.put(lambda: self._update_ollama_label(is_up, models))
+
+    def _update_ollama_label(self, is_up: bool, models: list[str]):
+        if is_up and self._ollama_model:
+            self.lbl_ollama.title = f"🟢  Ollama  •  {self._ollama_model}"
+        elif is_up:
+            self.lbl_ollama.title = "🟢  Ollama activo (sin modelo)"
+        else:
+            self.lbl_ollama.title = "🔴  Ollama no detectado"
 
     # ── Aufnahme ──────────────────────────────────────────────────────────────
 
@@ -330,9 +404,13 @@ class WisperBar(rumps.App):
         silence  = np.zeros(SAMPLE_RATE * 3, dtype=np.float32)
         audio    = np.concatenate([np.concatenate(self.frames).flatten(), silence])
         lang     = None if self.lang_code == "auto" else self.lang_code
+        user_terms = self._cfg.get("user_terms", [])
+        prompt   = build_initial_prompt(self.lang_code, user_terms) or None
+
         result   = mlx_whisper.transcribe(
             audio, path_or_hf_repo=MODEL_REPO,
             language=lang, task="transcribe",
+            initial_prompt=prompt,
         )
         detected = result.get("language", "")
         text     = result["text"].strip()
@@ -383,7 +461,9 @@ class WisperBar(rumps.App):
     # ── Sprache ───────────────────────────────────────────────────────────────
 
     def _set_lang(self, sender):
-        self.lang_code = sender._lang_code
+        self.lang_code          = sender._lang_code
+        self._cfg["language"]   = self.lang_code
+        save_config(self._cfg)
         for item in self.lang_items:
             item.state = (item._lang_code == self.lang_code)
 
