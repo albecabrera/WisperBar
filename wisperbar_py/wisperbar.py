@@ -105,15 +105,27 @@ def _acquire_lock():
 
 # ── Overlay ───────────────────────────────────────────────────────────────────
 
+_OVERLAY_MODES = ("waveform", "processing", "done", "error")
+
+
 class WaveformView(NSView):
 
     def initWithFrame_(self, frame):
         self = objc.super(WaveformView, self).initWithFrame_(frame)
         if self is not None:
-            self._current = [0.0] * BAR_COUNT
+            self._current  = [0.0] * BAR_COUNT
             self._targets  = [0.0] * BAR_COUNT
             self._idle_t   = 0.0
+            self._proc_t   = 0.0
+            self._flash_t  = 0.0
+            self._mode     = "waveform"
         return self
+
+    @objc.python_method
+    def set_mode(self, mode: str):
+        self._mode    = mode
+        self._flash_t = 1.5 if mode in ("done", "error") else 0.0
+        self.setNeedsDisplay_(True)
 
     @objc.python_method
     def tick(self, levels_deque):
@@ -125,9 +137,16 @@ class WaveformView(NSView):
             norm[min(int(i * ratio), len(norm) - 1)]
             for i in range(BAR_COUNT)
         ]
-        self._idle_t += 0.05
+        self._idle_t += 0.016
         for i in range(BAR_COUNT):
             self._current[i] += (self._targets[i] - self._current[i]) * 0.35
+        self.setNeedsDisplay_(True)
+
+    @objc.python_method
+    def tick_processing(self):
+        self._proc_t += 0.016
+        if self._flash_t > 0:
+            self._flash_t -= 0.016
         self.setNeedsDisplay_(True)
 
     def drawRect_(self, dirty):
@@ -138,19 +157,52 @@ class WaveformView(NSView):
         NSColor.clearColor().setFill()
         NSBezierPath.fillRect_(self.bounds())
 
-        # Fondo oscuro sólido — visible en modo claro y oscuro
         pill = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
             ((0.0, 0.0), (w, h)), r, r
         )
+
+        mode = self._mode
+
+        if mode == "done":
+            alpha = min(self._flash_t / 1.5, 1.0)
+            NSColor.colorWithRed_green_blue_alpha_(0.0, 0.72, 0.32, 0.92 * alpha).setFill()
+            pill.fill()
+            return
+
+        if mode == "error":
+            alpha = min(self._flash_t / 1.5, 1.0)
+            NSColor.colorWithRed_green_blue_alpha_(0.85, 0.15, 0.15, 0.92 * alpha).setFill()
+            pill.fill()
+            return
+
+        # Fondo oscuro sólido — visible en modo claro y oscuro
         NSColor.colorWithRed_green_blue_alpha_(0.08, 0.08, 0.12, 0.94).setFill()
         pill.fill()
-
-        # Borde blanco sutil para contraste en modo oscuro
         NSColor.colorWithRed_green_blue_alpha_(1.0, 1.0, 1.0, 0.18).setStroke()
         pill.setLineWidth_(1.0)
         pill.stroke()
 
-        # Barras
+        if mode == "processing":
+            # 3 puntos pulsantes con desfase de 120° (2.09 rad)
+            cx = w / 2.0
+            dot_gap = 22.0
+            for i in range(3):
+                phase  = self._proc_t * 4.5 + i * 2.094
+                scale  = 0.45 + 0.55 * (np.sin(phase) * 0.5 + 0.5)
+                radius = 7.0 * scale
+                dx     = cx + (i - 1) * dot_gap
+                dy     = h / 2.0
+                t      = i / 3.0
+                rc     = 0.10 + t * 0.15
+                gc     = 0.80 + t * 0.15
+                bc     = 0.95 - t * 0.40
+                NSColor.colorWithRed_green_blue_alpha_(rc, gc, bc, 0.90).setFill()
+                NSBezierPath.bezierPathWithOvalInRect_(
+                    ((dx - radius, dy - radius), (radius * 2, radius * 2))
+                ).fill()
+            return
+
+        # Modo waveform (barras)
         pad_x  = 36.0
         bar_w  = 4.0
         area_w = w - pad_x * 2
@@ -161,14 +213,11 @@ class WaveformView(NSView):
             height = max(idle * h * 0.9, lvl * h * 0.82)
             x      = pad_x + i * (bar_w + gap)
             y      = (h - height) / 2.0
-
-            t     = i / BAR_COUNT
-            # Colores vibrantes: cyan → verde — alto contraste sobre fondo oscuro
-            rc    = 0.10 + lvl * 0.20
-            gc    = 0.85 + t * 0.12
-            bc    = 0.95 - t * 0.40
-            alpha = 0.85 + lvl * 0.15
-
+            t      = i / BAR_COUNT
+            rc     = 0.10 + lvl * 0.20
+            gc     = 0.85 + t * 0.12
+            bc     = 0.95 - t * 0.40
+            alpha  = 0.85 + lvl * 0.15
             NSColor.colorWithRed_green_blue_alpha_(rc, gc, bc, alpha).setFill()
             NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
                 ((x, y), (bar_w, height)), bar_w / 2.0, bar_w / 2.0
@@ -222,6 +271,12 @@ class WaveformOverlay:
     def update(self, levels):
         self._view.tick(levels)
 
+    def set_mode(self, mode: str):
+        self._view.set_mode(mode)
+
+    def tick_processing(self):
+        self._view.tick_processing()
+
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
@@ -247,6 +302,10 @@ class WisperBar(rumps.App):
         )
         self._ollama_ok     = False
         self._ollama_model  = self._cfg.get("ollama_model", "")
+        self._spinner_frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+        self._spinner_idx    = 0
+        self._spinner_active = False
+        self._spinner_ticks  = 0
 
         self._build_menu()
         threading.Thread(target=self._load_model, daemon=True).start()
@@ -326,8 +385,20 @@ class WisperBar(rumps.App):
                 print(f"[WisperBar] error: {exc}", flush=True)
         except queue.Empty:
             pass
+
         if self.recording and self._overlay:
             self._overlay.update(self._levels)
+
+        if self._overlay and not self.recording:
+            self._overlay.tick_processing()
+
+        # Spinner en icono — cada 5 ticks ≈ 80ms
+        if self._spinner_active:
+            self._spinner_ticks += 1
+            if self._spinner_ticks >= 5:
+                self._spinner_ticks = 0
+                self._spinner_idx   = (self._spinner_idx + 1) % len(self._spinner_frames)
+                self.title = self._spinner_frames[self._spinner_idx]
 
     # ── Modell + Ollama laden ─────────────────────────────────────────────────
 
@@ -376,11 +447,12 @@ class WisperBar(rumps.App):
         self.transcript       = ""
         self._levels          = deque([0.0] * BAR_COUNT, maxlen=BAR_COUNT)
         pyperclip.copy("")
-        self.btn_record.title = "⏹  Stopp"
-        self.lbl_status.title = "●  Aufnahme läuft…"
+        self.btn_record.title = "⏹  Parar"
+        self.lbl_status.title = "●  Grabando…"
         self._refresh_actions()
         if self._overlay is None:
             self._overlay = WaveformOverlay()
+        self._overlay.set_mode("waveform")
         self._overlay.show()
         threading.Thread(target=self._record_loop, daemon=True).start()
 
@@ -408,17 +480,31 @@ class WisperBar(rumps.App):
 
     def _stop(self):
         self.recording        = False
-        self.title            = "⏳"
-        self.btn_record.title = "⏺  Aufnehmen"
-        self.lbl_status.title = "⏳  Transkription läuft…"
-        self._overlay.hide()
+        self.btn_record.title = "⏺  Grabar"
+        self.lbl_status.title = "⏳  Transcribiendo…"
+        if self._overlay:
+            self._overlay.set_mode("processing")
+        self._start_spinner()
         threading.Thread(target=self._transcribe, daemon=True).start()
 
     # ── Transkription ─────────────────────────────────────────────────────────
 
     def _transcribe(self):
+        def _done(text: str, wf_icon: str, detected: str, success: bool = True):
+            self._stop_spinner()
+            if self._overlay:
+                self._overlay.set_mode("done" if success else "error")
+                # Ocultar overlay después del flash
+                threading.Timer(1.6, lambda: self._main_q.put(self._overlay.hide)).start()
+            preview  = (text[:45] + "…") if len(text) > 45 else text
+            lang_tag = f" [{detected}]" if detected and self.lang_code == "auto" else ""
+            self.lbl_status.title = f'{wf_icon}{lang_tag}  "{preview}"'
+            self._refresh_actions()
+
         if not self.frames:
-            self.title = "🎤"
+            self._stop_spinner()
+            if self._overlay:
+                self._main_q.put(self._overlay.hide)
             self.lbl_status.title = "✅  Listo  —  mantener ⌥"
             return
 
@@ -429,8 +515,6 @@ class WisperBar(rumps.App):
         prompt     = build_initial_prompt(self.lang_code, user_terms) or None
 
         # Fase 1: Whisper
-        self._main_q.put(lambda: setattr(self, '_lbl_tmp', None) or
-                         setattr(self.lbl_status, 'title', "⏳  Transcribiendo…"))
         result   = mlx_whisper.transcribe(
             audio, path_or_hf_repo=MODEL_REPO,
             language=lang, task="transcribe",
@@ -440,19 +524,23 @@ class WisperBar(rumps.App):
         raw_text = result["text"].strip()
 
         if not raw_text:
-            self.title = "🎤"
+            self._stop_spinner()
+            if self._overlay:
+                self._main_q.put(self._overlay.hide)
             self.lbl_status.title = "✅  Listo  —  mantener ⌥"
             return
 
         # Fase 2: Ollama (si workflow lo requiere)
-        wf_def = WORKFLOW_BY_ID.get(self._workflow_id)
+        wf_def     = WORKFLOW_BY_ID.get(self._workflow_id)
         final_text = raw_text
+        wf_icon    = wf_def.icon if wf_def else "📝"
+        ollama_ok  = False
 
         if wf_def and wf_def.needs_ollama and self._ollama_ok and self._ollama_model:
-            effective_lang  = self.lang_code if self.lang_code != "auto" else (detected or "es")
-            emoji_density   = self._cfg.get("emoji_density", "media")
-            system_prompt   = get_system_prompt(self._workflow_id, effective_lang, emoji_density)
-            proc_label      = get_processing_label(self._workflow_id, effective_lang)
+            effective_lang = self.lang_code if self.lang_code != "auto" else (detected or "es")
+            emoji_density  = self._cfg.get("emoji_density", "media")
+            system_prompt  = get_system_prompt(self._workflow_id, effective_lang, emoji_density)
+            proc_label     = get_processing_label(self._workflow_id, effective_lang)
             self._main_q.put(lambda lbl=proc_label: setattr(self.lbl_status, 'title', lbl))
             try:
                 final_text = self._ollama.chat(
@@ -460,20 +548,17 @@ class WisperBar(rumps.App):
                     system=system_prompt,
                     user=raw_text,
                 )
+                ollama_ok = True
             except OllamaError as exc:
                 print(f"[WisperBar] Ollama error: {exc}", flush=True)
-                final_text = raw_text
+                self._main_q.put(lambda: setattr(
+                    self.lbl_ollama, 'title', "⚠️  Ollama no responde"
+                ))
 
         self.transcript = final_text
-        self.title      = "🎤"
-
         pyperclip.copy(final_text)
-        preview  = (final_text[:45] + "…") if len(final_text) > 45 else final_text
-        lang_tag = f" [{detected}]" if detected and self.lang_code == "auto" else ""
-        wf_icon  = wf_def.icon if wf_def else "📝"
-        self.lbl_status.title = f'{wf_icon}{lang_tag}  "{preview}"'
         self._paste_to_active_app()
-        self._refresh_actions()
+        self._main_q.put(lambda: _done(final_text, wf_icon, detected))
 
     # ── Aktionen ──────────────────────────────────────────────────────────────
 
@@ -519,6 +604,17 @@ class WisperBar(rumps.App):
         save_config(self._cfg)
         for item in self.workflow_items:
             item.state = (item._workflow_id == self._workflow_id)
+
+    # ── Spinner ───────────────────────────────────────────────────────────────
+
+    def _start_spinner(self):
+        self._spinner_active = True
+        self._spinner_idx    = 0
+        self._spinner_ticks  = 0
+
+    def _stop_spinner(self):
+        self._spinner_active = False
+        self.title = "🎤"
 
     # ── Right Option PTT ──────────────────────────────────────────────────────
 
