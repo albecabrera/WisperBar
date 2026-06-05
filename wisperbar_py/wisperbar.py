@@ -67,6 +67,7 @@ CONFIG_DEFAULTS = {
     "ollama_timeout":         60,
     "user_terms":             [],
     "emoji_density":          "media",
+    "whisper_model":          "mlx-community/whisper-large-v3-mlx",
     "hotkey_mode":            "hold",
     "tone_mejorar":           "neutral",
     "tone_profesional":       "neutral",
@@ -541,8 +542,9 @@ class WisperBar(rumps.App):
         prompt     = build_initial_prompt(self.lang_code, user_terms) or None
 
         # Fase 1: Whisper
-        result   = mlx_whisper.transcribe(
-            audio, path_or_hf_repo=MODEL_REPO,
+        model_repo = self._cfg.get("whisper_model", MODEL_REPO)
+        result     = mlx_whisper.transcribe(
+            audio, path_or_hf_repo=model_repo,
             language=lang, task="transcribe",
             initial_prompt=prompt,
         )

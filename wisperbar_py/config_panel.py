@@ -1,6 +1,7 @@
 import ctypes
 import subprocess
 import threading
+from pathlib import Path
 import objc
 from AppKit import (
     NSWindow, NSView, NSScrollView, NSTextField, NSButton,
@@ -17,6 +18,24 @@ from workflows import WORKFLOWS
 PANEL_W = 500
 PANEL_H = 620
 TAB_H   = PANEL_H - 100  # height available for tab content
+
+WHISPER_MODELS = [
+    ("Tiny   (~40 MB)",     "mlx-community/whisper-tiny-mlx"),
+    ("Base   (~74 MB)",     "mlx-community/whisper-base-mlx"),
+    ("Small  (~244 MB)",    "mlx-community/whisper-small-mlx"),
+    ("Medium (~769 MB)",    "mlx-community/whisper-medium-mlx"),
+    ("Large v3  (~1.5 GB)", "mlx-community/whisper-large-v3-mlx"),
+]
+
+
+def _model_installed(repo: str) -> bool:
+    cache  = Path.home() / ".cache" / "huggingface" / "hub"
+    folder = "models--" + repo.replace("/", "--")
+    snaps  = cache / folder / "snapshots"
+    try:
+        return snaps.exists() and any(snaps.iterdir())
+    except Exception:
+        return False
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -271,6 +290,50 @@ class ConfigPanel:
             _section_label(tab, t(key, lg), y, cw)
             y -= 4
 
+        # ── Modelo local Whisper ──────────────────────────────────────────────
+        sec("sec_local_model")
+
+        cur_wm = self._cfg.get("whisper_model", "mlx-community/whisper-large-v3-mlx")
+        wm_labels = [lbl for lbl, _ in WHISPER_MODELS]
+        wm_repos  = [repo for _, repo in WHISPER_MODELS]
+        cur_wm_label = next(
+            (lbl for lbl, repo in WHISPER_MODELS if repo == cur_wm),
+            wm_labels[-1],
+        )
+
+        y -= 28
+        _label(tab, t("lbl_whisper_model", lg), 20, y, 120)
+        _popup(tab, 140, y - 2, 280, wm_labels, cur_wm_label,
+               "whisper_model_popup", self._refs)
+        self._refs["_wm_repos"]  = wm_repos
+        self._refs["_wm_labels"] = wm_labels
+
+        # status instalado / no descargado
+        y -= 26
+        installed   = _model_installed(cur_wm)
+        status_text = t("model_installed" if installed else "model_not_downloaded", lg)
+        st_lbl = NSTextField.labelWithString_(status_text)
+        st_lbl.setFrame_(NSMakeRect(140, y, cw - 160, 18))
+        st_lbl.setFont_(NSFont.systemFontOfSize_(10.5))
+        st_lbl.setTextColor_(
+            NSColor.systemGreenColor() if installed else NSColor.systemOrangeColor()
+        )
+        tab.addSubview_(st_lbl)
+        self._refs["_model_status_lbl"] = st_lbl
+
+        # link HuggingFace
+        y -= 22
+        link_btn = NSButton.alloc().initWithFrame_(NSMakeRect(140, y, 250, 20))
+        link_btn.setTitle_(t("link_model_page", lg))
+        link_btn.setBezelStyle_(0)
+        link_btn.setBordered_(False)
+        link_btn.setFont_(NSFont.systemFontOfSize_(10.5))
+        link_btn.setContentTintColor_(NSColor.linkColor())
+        tab.addSubview_(link_btn)
+        self._setup_model_page_link(link_btn, cur_wm)
+
+        gap(20)
+
         # ── Atajo de teclado ──────────────────────────────────────────────────
         sec("sec_hotkey")
 
@@ -496,6 +559,19 @@ class ConfigPanel:
 
     # ── Actions ───────────────────────────────────────────────────────────────
 
+    def _setup_model_page_link(self, btn: NSButton, repo: str):
+        url = f"https://huggingface.co/{repo}"
+
+        class OpenLink(objc.lookUpClass("NSObject")):
+            @objc.python_method
+            def act(self_inner):
+                subprocess.run(["open", url])
+
+        delegate = OpenLink.alloc().init()
+        btn.setTarget_(delegate)
+        btn.setAction_(objc.selector(delegate.act, selector=b"act", signature=b"v@:"))
+        btn._link_delegate = delegate
+
     def _setup_add_term(self, btn: NSButton, field: NSTextField):
         panel_ref = self
 
@@ -569,6 +645,15 @@ class ConfigPanel:
     def _collect_and_save(self):
         refs = self._refs
         cfg  = self._cfg
+
+        # Whisper model
+        wm_popup  = refs.get("whisper_model_popup")
+        wm_labels = refs.get("_wm_labels", [])
+        wm_repos  = refs.get("_wm_repos", [])
+        if wm_popup and wm_labels and wm_repos:
+            sel = wm_popup.titleOfSelectedItem() or ""
+            if sel in wm_labels:
+                cfg["whisper_model"] = wm_repos[wm_labels.index(sel)]
 
         # Hotkey mode
         seg = refs.get("hotkey_mode_seg")
