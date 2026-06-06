@@ -46,7 +46,7 @@ from sentence_parser import auto_punctuate_questions
 # ── Constantes ────────────────────────────────────────────────────────────────
 
 SAMPLE_RATE = 16_000
-MODEL_REPO  = "mlx-community/whisper-large-v3-mlx"
+MODEL_REPO  = "mlx-community/whisper-large-v3-turbo"
 LOCK_PATH   = "/tmp/wisperbar.lock"
 APP_VERSION = os.environ.get("WISPERBAR_VERSION", "dev")
 APP_BUILD   = os.environ.get("WISPERBAR_BUILD", "0")
@@ -79,7 +79,7 @@ CONFIG_DEFAULTS = {
     # Other
     "user_terms":             [],
     "emoji_density":          "media",
-    "whisper_model":          "mlx-community/whisper-large-v3-mlx",
+    "whisper_model":          "mlx-community/whisper-large-v3-turbo",
     "hotkey_mode":            "hold",
     "tone_mejorar":           "neutral",
     "tone_profesional":       "neutral",
@@ -427,6 +427,13 @@ class WisperBar(rumps.App):
         return t("status_ready_hold" if mode == "hold" else "status_ready_toggle", lg)
 
     def _load_model(self):
+        # Precalentar Whisper en background → primer dictado sin stall de carga
+        model_repo = self._cfg.get("whisper_model", MODEL_REPO)
+        try:
+            warm = np.zeros(SAMPLE_RATE, dtype=np.float32)
+            mlx_whisper.transcribe(warm, path_or_hf_repo=model_repo)
+        except Exception as exc:
+            print(f"[WisperBar] warmup error: {exc}", flush=True)
         self.model = True
         self.lbl_status.title = self._ready_status()
 

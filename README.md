@@ -85,7 +85,7 @@ El audio **nunca sale** de este diagrama. No hay paso 5 que diga "enviar a la nu
 | Tecnología | Qué hace en este proyecto |
 |------------|--------------------------|
 | **Python 3.10+** | Lenguaje de scripting; orquesta el flujo completo |
-| **MLX Whisper** | Whisper large-v3 de OpenAI corriendo en Apple Silicon con el framework MLX de Apple — reconocimiento de voz muy preciso, multiidioma |
+| **MLX Whisper** | Whisper large-v3-turbo de OpenAI corriendo en Apple Silicon con el framework MLX de Apple — reconocimiento de voz muy preciso, multiidioma, más rápido que large-v3 |
 | **MLX** | Framework de Apple para Machine Learning en chips M1/M2/M3/M4. Usa la GPU/Neural Engine del chip sin necesidad de CUDA ni GPU externa |
 | **sounddevice** | Captura audio del micrófono vía PortAudio |
 | **NumPy** | Procesa las muestras de audio (arrays float32, cálculo de RMS) |
@@ -98,6 +98,8 @@ El audio **nunca sale** de este diagrama. No hay paso 5 que diga "enviar a la nu
 
 Whisper es un modelo de inteligencia artificial creado por OpenAI que escucha audio y lo convierte en texto. Normalmente requiere una computadora muy potente o conexión a internet. Apple creó MLX, un framework que hace que ese mismo modelo corra directamente en el chip M1/M2/M3/M4 de tu Mac, usando la parte del chip dedicada a inteligencia artificial (Neural Engine), sin necesidad de internet ni de hardware especial.
 
+WisperBar usa **large-v3-turbo**, una versión destilada que es ~8x más rápida que large-v3 con precisión casi idéntica. Además, al iniciar, la app ejecuta un **warmup** silencioso — transcribe un segundo de silencio — para que el primer dictado real no tenga el delay de carga del modelo.
+
 ---
 
 ## Dos versiones
@@ -107,7 +109,7 @@ Este repositorio contiene dos implementaciones independientes:
 | | Swift nativa | Python + MLX Whisper |
 |-|-------------|----------------------|
 | **Ubicación** | `WisperBar/` | `wisperbar_py/` |
-| **Motor de voz** | SFSpeechRecognizer (Apple) | Whisper large-v3 (OpenAI vía MLX) |
+| **Motor de voz** | SFSpeechRecognizer (Apple) | Whisper large-v3-turbo (OpenAI vía MLX) |
 | **Idiomas** | Español (`es-ES`) | Auto-detect + ES / EN / DE |
 | **Primer arranque** | Instantáneo | Descarga el modelo (~1.5 GB, solo la primera vez) |
 | **Precisión** | Alta para español | Muy alta, multiidioma |
@@ -169,7 +171,45 @@ El script hace:
 3. Instala todas las dependencias del `requirements.txt`
 4. Lanza WisperBar desde el entorno aislado
 
-La primera vez descarga el modelo Whisper large-v3 (~1.5 GB). Las siguientes veces arranca directamente.
+La primera vez descarga el modelo Whisper large-v3-turbo (~800 MB). Las siguientes veces arranca directamente.
+
+---
+
+### Inicio automático (LaunchAgent)
+
+La versión Python se registra como **LaunchAgent** de macOS la primera vez que arranca. Esto significa que se inicia automáticamente con cada encendido o reinicio sin ninguna acción adicional.
+
+**Cómo funciona:**
+
+El módulo `autostart.py` genera y carga un plist en `~/Library/LaunchAgents/com.wisperbar.app.plist` con estas propiedades:
+
+| Propiedad | Valor | Efecto |
+|-----------|-------|--------|
+| `RunAtLoad` | `true` | Arranca al hacer login |
+| `KeepAlive.Crashed` | `true` | Se reinicia automáticamente si crashea |
+| `ProcessType` | `Interactive` | Acceso a micrófono y pantalla |
+| Logs | `/tmp/wisperbar.log` / `/tmp/wisperbar.err` | stdout y stderr persistidos |
+
+**Comandos de gestión manual:**
+
+```bash
+# Ver si está corriendo (primera columna = PID, - = detenido)
+launchctl list | grep wisperbar
+
+# Iniciar ahora (sin reiniciar)
+launchctl kickstart gui/$(id -u)/com.wisperbar.app
+
+# Detener
+launchctl kill TERM gui/$(id -u)/com.wisperbar.app
+
+# Deshabilitar inicio automático
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.wisperbar.app.plist
+
+# Ver logs en tiempo real
+tail -f /tmp/wisperbar.log /tmp/wisperbar.err
+```
+
+> **Nota:** Si `brew upgrade` actualiza Python, el plist queda apuntando al ejecutable viejo. En ese caso, borrá `~/Library/LaunchAgents/com.wisperbar.app.plist` y reiniciá la app manualmente — se auto-registra con la nueva ruta.
 
 ---
 

@@ -28,7 +28,10 @@ _TEMPLATE = """\
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
-    <false/>
+    <dict>
+        <key>Crashed</key>
+        <true/>
+    </dict>
     <key>ProcessType</key>
     <string>Interactive</string>
     <key>StandardOutPath</key>
@@ -49,7 +52,11 @@ def is_registered() -> bool:
     if not PLIST.exists():
         return False
     content = PLIST.read_text()
-    return sys.executable in content and str(_SCRIPT) in content
+    return (
+        sys.executable in content
+        and str(_SCRIPT) in content
+        and "<key>Crashed</key>" in content  # plist con KeepAlive nuevo
+    )
 
 
 def register() -> bool:
