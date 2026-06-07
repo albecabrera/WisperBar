@@ -3,21 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Contraseñas — La Composición (Docente)</title>
+  <title>Contraseñas Nivel 2 — La Composición (Docente)</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Special+Elite&family=EB+Garamond:ital,wght@0,400;1,400&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --amber:  #C4813A;
+      --amber:  #7BA7BC;
       --dark:   #1C1005;
-      --paper:  #FBF6ED;
-      --rule:   #D4B896;
-      --muted:  #8B7355;
+      --paper:  #EEF4F9;
+      --rule:   #B8CEDa;
+      --muted:  #6A8898;
     }
 
     body {
-      background: #F0EAE0;
+      background: #E4ECF2;
       font-family: 'EB Garamond', Georgia, serif;
       color: var(--dark);
       -webkit-font-smoothing: antialiased;
@@ -32,7 +32,6 @@
       position: relative;
     }
 
-    /* Decorative corner marks */
     .page::before, .page::after {
       content: '';
       position: absolute;
@@ -43,7 +42,6 @@
     .page::before { top: 16px; left: 16px; border-width: 2px 0 0 2px; }
     .page::after  { bottom: 16px; right: 16px; border-width: 0 2px 2px 0; }
 
-    /* Header */
     .doc-eyebrow {
       font-family: 'Special Elite', 'Courier New', monospace;
       font-size: 10px;
@@ -78,7 +76,6 @@
       margin: 24px 0;
     }
 
-    /* Info box */
     .info-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -99,7 +96,6 @@
       color: var(--dark);
     }
 
-    /* Room cards */
     .rooms-grid {
       display: flex;
       flex-direction: column;
@@ -138,17 +134,8 @@
       color: var(--muted);
       margin-bottom: 8px;
     }
-    .room-question {
-      font-size: 13.5px;
-      color: #4A3520;
-      line-height: 1.5;
-    }
-    .room-hints {
-      margin-top: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
+    .room-question { font-size: 13.5px; color: #2A3C48; line-height: 1.5; }
+    .room-hints { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
     .room-hint {
       font-family: 'EB Garamond', serif;
       font-style: italic;
@@ -158,16 +145,9 @@
       border-left: 2px solid var(--rule);
       line-height: 1.45;
     }
-    .room-hint strong {
-      font-style: normal;
-      color: #6B5030;
-      font-weight: 600;
-    }
+    .room-hint strong { font-style: normal; color: #3A5868; font-weight: 600; }
 
-    .password-cell {
-      text-align: center;
-      padding-top: 4px;
-    }
+    .password-cell { text-align: center; padding-top: 4px; }
     .password-badge {
       display: inline-block;
       padding: 6px 14px 7px;
@@ -178,10 +158,7 @@
       line-height: 1;
     }
 
-    /* Notes area */
-    .notes-section {
-      margin-top: 28px;
-    }
+    .notes-section { margin-top: 28px; }
     .notes-label {
       font-family: 'Special Elite', monospace;
       font-size: 10px;
@@ -190,17 +167,9 @@
       text-transform: uppercase;
       margin-bottom: 10px;
     }
-    .notes-lines {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-    }
-    .notes-line {
-      height: 32px;
-      border-bottom: 1px solid var(--rule);
-    }
+    .notes-lines { display: flex; flex-direction: column; gap: 0; }
+    .notes-line { height: 32px; border-bottom: 1px solid var(--rule); }
 
-    /* Footer */
     .doc-footer {
       margin-top: 36px;
       padding-top: 16px;
@@ -215,7 +184,6 @@
       text-transform: uppercase;
     }
 
-    /* Print button */
     .print-btn {
       position: fixed;
       top: 20px; right: 20px;
@@ -233,7 +201,6 @@
     }
     .print-btn:hover { filter: brightness(1.1); }
 
-    /* Back link */
     .back-link {
       position: fixed;
       top: 22px; left: 20px;
@@ -246,12 +213,12 @@
     }
     .back-link:hover { color: var(--amber); }
 
-    /* ── Print styles ─────────────────────────────────────────── */
     @media print {
       body { background: white; }
       .page { margin: 0; box-shadow: none; padding: 32px 40px 40px; max-width: 100%; }
       .print-btn, .back-link { display: none !important; }
       .room-row { break-inside: avoid; }
+      #pw-gate { display: none !important; }
     }
 
     @media (max-width: 640px) {
@@ -268,15 +235,15 @@
 <body>
 
 <!-- ── Password gate ── -->
-<div id="pw-gate" style="position:fixed;inset:0;background:#F0EAE0;display:flex;align-items:center;justify-content:center;z-index:9999;">
-  <div style="text-align:center;max-width:360px;padding:44px 36px;background:#FBF6ED;border:1px solid #D4B896;box-shadow:0 8px 48px rgba(0,0,0,0.12);">
-    <div style="font-family:'Special Elite',monospace;font-size:10px;letter-spacing:4px;color:#C4813A;margin-bottom:14px;text-transform:uppercase;">Documento confidencial · Docente</div>
+<div id="pw-gate" style="position:fixed;inset:0;background:#E4ECF2;display:flex;align-items:center;justify-content:center;z-index:9999;">
+  <div style="text-align:center;max-width:360px;padding:44px 36px;background:#EEF4F9;border:1px solid #B8CADA;box-shadow:0 8px 48px rgba(0,0,0,0.12);">
+    <div style="font-family:'Special Elite',monospace;font-size:10px;letter-spacing:4px;color:#7BA7BC;margin-bottom:14px;text-transform:uppercase;">Documento confidencial · Docente</div>
     <h2 style="font-family:'Playfair Display',serif;font-size:20px;color:#1C1005;margin-bottom:6px;">La composición</h2>
-    <p style="font-family:'EB Garamond',serif;font-style:italic;font-size:14px;color:#8B7355;margin-bottom:28px;line-height:1.55;">Nivel 1 · Contraseñas y pistas</p>
+    <p style="font-family:'EB Garamond',serif;font-style:italic;font-size:14px;color:#6A8898;margin-bottom:28px;line-height:1.55;">Nivel 2 · Contraseñas y pistas</p>
     <form onsubmit="checkPw(event)" style="display:flex;flex-direction:column;gap:12px;">
       <input type="password" id="pw-input" placeholder="Contraseña..." autocomplete="off" autofocus
-        style="padding:12px 16px;font-family:'Special Elite',monospace;font-size:17px;letter-spacing:4px;border:2px solid #C4813A;background:#FDF9F3;color:#1C1005;outline:none;text-align:center;width:100%;box-sizing:border-box;" />
-      <button type="submit" style="background:#C4813A;color:#0D0906;border:none;padding:13px;font-family:'Special Elite',monospace;font-size:13px;letter-spacing:3px;cursor:pointer;width:100%;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''">ACCEDER</button>
+        style="padding:12px 16px;font-family:'Special Elite',monospace;font-size:17px;letter-spacing:4px;border:2px solid #7BA7BC;background:#F4F8FB;color:#1C1005;outline:none;text-align:center;width:100%;box-sizing:border-box;" />
+      <button type="submit" style="background:#7BA7BC;color:#0D0906;border:none;padding:13px;font-family:'Special Elite',monospace;font-size:13px;letter-spacing:3px;cursor:pointer;width:100%;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''">ACCEDER</button>
     </form>
     <p id="pw-err" style="font-family:'EB Garamond',serif;font-style:italic;font-size:13px;color:#8B3A3A;margin-top:14px;min-height:18px;opacity:0;transition:opacity 0.25s;">Contraseña incorrecta. Inténtalo de nuevo.</p>
   </div>
@@ -288,9 +255,9 @@
 <div class="page">
 
   <!-- Header -->
-  <div class="doc-eyebrow">Documento de uso docente · Confidencial</div>
+  <div class="doc-eyebrow">Documento de uso docente · Confidencial · Nivel 2</div>
   <h1 class="doc-title">La composición</h1>
-  <p class="doc-subtitle">Antonio Skármeta · Escape Room · Español Q1</p>
+  <p class="doc-subtitle">Antonio Skármeta · Escape Room · Nivel 2 — Los personajes</p>
   <hr class="doc-divider" />
 
   <!-- Meta info -->
@@ -300,12 +267,12 @@
       <span><em>La composición</em>, A. Skármeta (1999)</span>
     </div>
     <div class="info-item">
-      <label>Nivel</label>
-      <span>B1 · Q1 (12.º grado) · NRW Abitur</span>
+      <label>Nivel del juego</label>
+      <span>Nivel 2 · Los personajes</span>
     </div>
     <div class="info-item">
       <label>Duración estimada</label>
-      <span>~25 minutos</span>
+      <span>~25–30 minutos</span>
     </div>
     <div class="info-item">
       <label>Número de salas</label>
@@ -320,80 +287,80 @@
     <div class="room-row">
       <div class="room-number">01</div>
       <div class="room-info">
-        <div class="room-title">El cuarto de Pedro</div>
-        <div class="room-subtitle">Chile, octubre de 1973</div>
-        <div class="room-question">¿Cuál es el nombre del mejor amigo de Pedro, el hijo del almacenero?</div>
+        <div class="room-title">Los padres de Pedro</div>
+        <div class="room-subtitle">El miedo de los que saben</div>
+        <div class="room-question">¿Cómo están sentados los padres de Pedro cuando él vuelve con el pijama y los encuentra escuchando la radio? (una palabra)</div>
         <div class="room-hints">
-          <div class="room-hint"><strong>Pista 1:</strong> Busca el nombre del mejor amigo de Pedro. Aparece en dos documentos distintos.</div>
-          <div class="room-hint"><strong>Pista 2:</strong> El nombre está en la carta personal Y en el cuaderno escolar: el amigo que juega de arquero.</div>
+          <div class="room-hint"><strong>Pista 1:</strong> Busca el extracto de la novela donde Pedro regresa con el pijama y encuentra a sus padres en el sillón escuchando la radio.</div>
+          <div class="room-hint"><strong>Pista 2:</strong> Los padres están juntos en el sillón, muy cerca. ¿Cómo están físicamente el uno con el otro?</div>
         </div>
       </div>
       <div class="password-cell">
-        <span class="password-badge" style="color:#C4813A; border-color:#C4813A;">DANIEL</span>
+        <span class="password-badge" style="color:#7BA7BC; border-color:#7BA7BC;">ABRAZO</span>
       </div>
     </div>
 
     <div class="room-row">
       <div class="room-number">02</div>
       <div class="room-info">
-        <div class="room-title">La calle del barrio</div>
-        <div class="room-subtitle">Un día de octubre — la detención</div>
-        <div class="room-question">¿Contra qué dice Daniel que estaba su padre? (una sola palabra)</div>
+        <div class="room-title">Daniel — tras la detención</div>
+        <div class="room-subtitle">La responsabilidad que no le tocaba</div>
+        <div class="room-question">¿Qué le pide don Daniel a su hijo cuando los soldados se lo llevan? (la última palabra de su frase)</div>
         <div class="room-hints">
-          <div class="room-hint"><strong>Pista 1:</strong> Busca la palabra que Daniel usa para explicar por qué se llevaron a su padre.</div>
-          <div class="room-hint"><strong>Pista 2:</strong> En el diálogo del libro y en el periódico encontrarás la misma palabra clave.</div>
+          <div class="room-hint"><strong>Pista 1:</strong> Busca las últimas palabras que el padre de Daniel le dice cuando los soldados se lo llevan.</div>
+          <div class="room-hint"><strong>Pista 2:</strong> El padre de Daniel le hace una petición concreta a su hijo antes de que el jeep parta. ¿Qué le pide exactamente?</div>
         </div>
       </div>
       <div class="password-cell">
-        <span class="password-badge" style="color:#7BA7BC; border-color:#7BA7BC;">DICTADURA</span>
+        <span class="password-badge" style="color:#7BA7BC; border-color:#7BA7BC;">NEGOCIO</span>
       </div>
     </div>
 
     <div class="room-row">
       <div class="room-number">03</div>
       <div class="room-info">
-        <div class="room-title">La sala de casa</div>
-        <div class="room-subtitle">La noche después de la detención</div>
-        <div class="room-question">¿Con qué objeto compara Pedro el momento en que todas las piezas encajan? (una palabra)</div>
+        <div class="room-title">La maestra</div>
+        <div class="room-subtitle">Entre el miedo y la conciencia</div>
+        <div class="room-question">¿Cómo describe el narrador la postura de la maestra cuando entra al aula con el capitán? (una sola palabra del texto)</div>
         <div class="room-hints">
-          <div class="room-hint"><strong>Pista 1:</strong> ¿Qué imagen usa Pedro para describir el momento en que todo empieza a tener sentido?</div>
-          <div class="room-hint"><strong>Pista 2:</strong> En el extracto de la novela, Pedro usa una metáfora específica cuando escucha la radio.</div>
+          <div class="room-hint"><strong>Pista 1:</strong> Busca en el extracto del libro cómo describe el narrador la postura de la maestra cuando entra al aula.</div>
+          <div class="room-hint"><strong>Pista 2:</strong> El narrador usa un adjetivo muy concreto para describir cómo entra la maestra. Está en la misma frase que "acompañada por un señor con uniforme militar".</div>
         </div>
       </div>
       <div class="password-cell">
-        <span class="password-badge" style="color:#D4A843; border-color:#D4A843; font-size:11px; letter-spacing:1.5px;">ROMPECABEZAS</span>
+        <span class="password-badge" style="color:#9B6B9B; border-color:#9B6B9B;">TIESA</span>
       </div>
     </div>
 
     <div class="room-row">
       <div class="room-number">04</div>
       <div class="room-info">
-        <div class="room-title">La escuela — el capitán Romo</div>
-        <div class="room-subtitle">Al día siguiente — la trampa</div>
-        <div class="room-question">¿Cómo se llama el general de parte del cual viene el capitán Romo? (su apellido)</div>
+        <div class="room-title">Juan — el amigo silencioso</div>
+        <div class="room-subtitle">El mismo miedo, diferente respuesta</div>
+        <div class="room-question">¿Adónde se llevaron al padre de Juan? (una sola palabra)</div>
         <div class="room-hints">
-          <div class="room-hint"><strong>Pista 1:</strong> El capitán Romo dice que viene de parte de alguien. ¿Quién es esa persona?</div>
-          <div class="room-hint"><strong>Pista 2:</strong> El capitán dice que la medalla la dará 'la propia mano del general…'</div>
+          <div class="room-hint"><strong>Pista 1:</strong> Busca el susurro entre Pedro y Juan en el aula. Juan le dice a Pedro adónde se llevaron a su padre.</div>
+          <div class="room-hint"><strong>Pista 2:</strong> En el diálogo de la novela, Juan dice: 'A mi papá se lo llevaron preso al...' — ¿a qué dirección?</div>
         </div>
       </div>
       <div class="password-cell">
-        <span class="password-badge" style="color:#8B3A3A; border-color:#8B3A3A;">PERDOMO</span>
+        <span class="password-badge" style="color:#6B8FAA; border-color:#6B8FAA;">NORTE</span>
       </div>
     </div>
 
     <div class="room-row">
       <div class="room-number">05</div>
       <div class="room-info">
-        <div class="room-title">La composición de Pedro</div>
-        <div class="room-subtitle">La decisión más importante</div>
-        <div class="room-question">¿Qué inventó Pedro que juegan sus padres por las noches en la composición? (una palabra)</div>
+        <div class="room-title">Pedro — el héroe con lápiz</div>
+        <div class="room-subtitle">La inteligencia como resistencia</div>
+        <div class="room-question">¿Con qué objeto — su "arma" — protege Pedro a su familia? (una sola palabra)</div>
         <div class="room-hints">
-          <div class="room-hint"><strong>Pista 1:</strong> ¿Qué juego inventó Pedro que juegan sus padres por las noches?</div>
-          <div class="room-hint"><strong>Pista 2:</strong> Lee la composición oficial de Pedro: sus padres hacen algo en el sillón. ¿Qué?</div>
+          <div class="room-hint"><strong>Pista 1:</strong> Busca el texto que explica con qué "arma" protege Pedro a su familia — no es un arma de verdad.</div>
+          <div class="room-hint"><strong>Pista 2:</strong> En el texto sobre la resistencia inteligente se explica qué herramienta usa Pedro. ¿Con qué objeto escribe su composición?</div>
         </div>
       </div>
       <div class="password-cell">
-        <span class="password-badge" style="color:#5C9E6F; border-color:#5C9E6F;">AJEDREZ</span>
+        <span class="password-badge" style="color:#5C9E6F; border-color:#5C9E6F; font-size:12px; letter-spacing:2px;">LÁPIZ</span>
       </div>
     </div>
 
@@ -415,14 +382,13 @@
 
   <!-- Footer -->
   <div class="doc-footer">
-    <span>Escape Room · La composición · A. Skármeta · Nivel 1</span>
+    <span>Escape Room · La composición · A. Skármeta · Nivel 2</span>
     <span>Español Q1 · NRW Gesamtschule Bonn</span>
   </div>
 
   <!-- Level navigation -->
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--rule);display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
-    <span style="font-family:'Special Elite',monospace;font-size:9px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;align-self:center;">Otros niveles:</span>
-    <a href="Contraseñas2.html" style="font-family:'Special Elite',monospace;font-size:10px;letter-spacing:2px;color:var(--amber);text-decoration:none;border-bottom:1px solid currentColor;padding-bottom:1px;">Nivel 2 — Los personajes →</a>
+    <a href="Contraseñas.html" style="font-family:'Special Elite',monospace;font-size:10px;letter-spacing:2px;color:var(--amber);text-decoration:none;border-bottom:1px solid currentColor;padding-bottom:1px;">← Nivel 1 — La historia</a>
     <a href="Contraseñas3.html" style="font-family:'Special Elite',monospace;font-size:10px;letter-spacing:2px;color:var(--amber);text-decoration:none;border-bottom:1px solid currentColor;padding-bottom:1px;">Nivel 3 — Historia y análisis →</a>
   </div>
 
@@ -447,7 +413,7 @@
       document.getElementById('pw-input').style.borderColor = '#8B3A3A';
       document.getElementById('pw-err').style.opacity = '1';
       setTimeout(() => {
-        document.getElementById('pw-input').style.borderColor = '#C4813A';
+        document.getElementById('pw-input').style.borderColor = '#7BA7BC';
         document.getElementById('pw-err').style.opacity = '0';
       }, 2200);
     }

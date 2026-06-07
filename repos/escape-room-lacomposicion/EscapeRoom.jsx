@@ -419,11 +419,20 @@ function EscapeRoom() {
 
         {/* Footer links */}
         <div style={{ paddingBottom: 36, display: "flex", gap: 24, flexWrap: "wrap", justifyContent: "center", alignItems: "center" }}>
-          <a href="Contraseñas.html" target="_blank"
-            style={{ fontFamily: "var(--ff-mono)", fontSize: 10, letterSpacing: 3, color: "rgba(15,10,4,0.28)", textDecoration: "none", borderBottom: "1px solid rgba(15,10,4,0.15)", paddingBottom: 2, transition: "color 0.2s" }}
-            onMouseEnter={e => e.currentTarget.style.color = "rgba(15,10,4,0.58)"}
-            onMouseLeave={e => e.currentTarget.style.color = "rgba(15,10,4,0.28)"}
-          >🖨 Hoja para el/la docente</a>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+            <span style={{ fontFamily: "var(--ff-mono)", fontSize: 10, letterSpacing: 2, color: "rgba(15,10,4,0.30)" }}>🖨 Docente:</span>
+            {[
+              { href: "Contraseñas.html",  label: "Nivel 1" },
+              { href: "Contraseñas2.html", label: "Nivel 2" },
+              { href: "Contraseñas3.html", label: "Nivel 3" },
+            ].map(({ href, label }) => (
+              <a key={label} href={href} target="_blank"
+                style={{ fontFamily: "var(--ff-mono)", fontSize: 10, letterSpacing: 2, color: "rgba(15,10,4,0.30)", textDecoration: "none", borderBottom: "1px solid rgba(15,10,4,0.14)", paddingBottom: 1, transition: "color 0.2s" }}
+                onMouseEnter={e => e.currentTarget.style.color = "rgba(15,10,4,0.58)"}
+                onMouseLeave={e => e.currentTarget.style.color = "rgba(15,10,4,0.30)"}
+              >{label}</a>
+            ))}
+          </div>
           {totalSolved > 0 && (
             <button onClick={resetGame}
               style={{ background: "transparent", border: "none", fontFamily: "var(--ff-mono)", fontSize: 10, letterSpacing: 3, color: "rgba(15,10,4,0.22)", cursor: "pointer", textDecoration: "none", borderBottom: "1px solid rgba(15,10,4,0.1)", paddingBottom: 2, transition: "color 0.2s" }}

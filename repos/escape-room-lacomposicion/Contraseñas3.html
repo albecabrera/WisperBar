@@ -3,21 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Contraseñas — La Composición (Docente)</title>
+  <title>Contraseñas Nivel 3 — La Composición (Docente)</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Special+Elite&family=EB+Garamond:ital,wght@0,400;1,400&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --amber:  #C4813A;
+      --amber:  #5C9E6F;
       --dark:   #1C1005;
-      --paper:  #FBF6ED;
-      --rule:   #D4B896;
-      --muted:  #8B7355;
+      --paper:  #EDF8F1;
+      --rule:   #A8D4B4;
+      --muted:  #4A7A5A;
     }
 
     body {
-      background: #F0EAE0;
+      background: #DFF0E4;
       font-family: 'EB Garamond', Georgia, serif;
       color: var(--dark);
       -webkit-font-smoothing: antialiased;
@@ -32,7 +32,6 @@
       position: relative;
     }
 
-    /* Decorative corner marks */
     .page::before, .page::after {
       content: '';
       position: absolute;
@@ -43,7 +42,6 @@
     .page::before { top: 16px; left: 16px; border-width: 2px 0 0 2px; }
     .page::after  { bottom: 16px; right: 16px; border-width: 0 2px 2px 0; }
 
-    /* Header */
     .doc-eyebrow {
       font-family: 'Special Elite', 'Courier New', monospace;
       font-size: 10px;
@@ -78,7 +76,6 @@
       margin: 24px 0;
     }
 
-    /* Info box */
     .info-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -94,17 +91,9 @@
       display: block;
       margin-bottom: 2px;
     }
-    .info-item span {
-      font-size: 15px;
-      color: var(--dark);
-    }
+    .info-item span { font-size: 15px; color: var(--dark); }
 
-    /* Room cards */
-    .rooms-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-    }
+    .rooms-grid { display: flex; flex-direction: column; gap: 0; }
     .room-row {
       display: grid;
       grid-template-columns: 28px 1fr 160px;
@@ -124,31 +113,10 @@
       text-align: right;
     }
     .room-info { min-width: 0; }
-    .room-title {
-      font-family: 'Playfair Display', serif;
-      font-size: 17px;
-      font-weight: 700;
-      color: var(--dark);
-      margin-bottom: 2px;
-    }
-    .room-subtitle {
-      font-family: 'EB Garamond', serif;
-      font-style: italic;
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 8px;
-    }
-    .room-question {
-      font-size: 13.5px;
-      color: #4A3520;
-      line-height: 1.5;
-    }
-    .room-hints {
-      margin-top: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
+    .room-title { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 700; color: var(--dark); margin-bottom: 2px; }
+    .room-subtitle { font-family: 'EB Garamond', serif; font-style: italic; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    .room-question { font-size: 13.5px; color: #1A3A22; line-height: 1.5; }
+    .room-hints { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
     .room-hint {
       font-family: 'EB Garamond', serif;
       font-style: italic;
@@ -158,16 +126,9 @@
       border-left: 2px solid var(--rule);
       line-height: 1.45;
     }
-    .room-hint strong {
-      font-style: normal;
-      color: #6B5030;
-      font-weight: 600;
-    }
+    .room-hint strong { font-style: normal; color: #3A6848; font-weight: 600; }
 
-    .password-cell {
-      text-align: center;
-      padding-top: 4px;
-    }
+    .password-cell { text-align: center; padding-top: 4px; }
     .password-badge {
       display: inline-block;
       padding: 6px 14px 7px;
@@ -178,10 +139,7 @@
       line-height: 1;
     }
 
-    /* Notes area */
-    .notes-section {
-      margin-top: 28px;
-    }
+    .notes-section { margin-top: 28px; }
     .notes-label {
       font-family: 'Special Elite', monospace;
       font-size: 10px;
@@ -190,17 +148,9 @@
       text-transform: uppercase;
       margin-bottom: 10px;
     }
-    .notes-lines {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-    }
-    .notes-line {
-      height: 32px;
-      border-bottom: 1px solid var(--rule);
-    }
+    .notes-lines { display: flex; flex-direction: column; gap: 0; }
+    .notes-line { height: 32px; border-bottom: 1px solid var(--rule); }
 
-    /* Footer */
     .doc-footer {
       margin-top: 36px;
       padding-top: 16px;
@@ -215,7 +165,6 @@
       text-transform: uppercase;
     }
 
-    /* Print button */
     .print-btn {
       position: fixed;
       top: 20px; right: 20px;
@@ -233,7 +182,6 @@
     }
     .print-btn:hover { filter: brightness(1.1); }
 
-    /* Back link */
     .back-link {
       position: fixed;
       top: 22px; left: 20px;
@@ -246,12 +194,12 @@
     }
     .back-link:hover { color: var(--amber); }
 
-    /* ── Print styles ─────────────────────────────────────────── */
     @media print {
       body { background: white; }
       .page { margin: 0; box-shadow: none; padding: 32px 40px 40px; max-width: 100%; }
       .print-btn, .back-link { display: none !important; }
       .room-row { break-inside: avoid; }
+      #pw-gate { display: none !important; }
     }
 
     @media (max-width: 640px) {
@@ -268,15 +216,15 @@
 <body>
 
 <!-- ── Password gate ── -->
-<div id="pw-gate" style="position:fixed;inset:0;background:#F0EAE0;display:flex;align-items:center;justify-content:center;z-index:9999;">
-  <div style="text-align:center;max-width:360px;padding:44px 36px;background:#FBF6ED;border:1px solid #D4B896;box-shadow:0 8px 48px rgba(0,0,0,0.12);">
-    <div style="font-family:'Special Elite',monospace;font-size:10px;letter-spacing:4px;color:#C4813A;margin-bottom:14px;text-transform:uppercase;">Documento confidencial · Docente</div>
+<div id="pw-gate" style="position:fixed;inset:0;background:#DFF0E4;display:flex;align-items:center;justify-content:center;z-index:9999;">
+  <div style="text-align:center;max-width:360px;padding:44px 36px;background:#EDF8F1;border:1px solid #A8D4B4;box-shadow:0 8px 48px rgba(0,0,0,0.12);">
+    <div style="font-family:'Special Elite',monospace;font-size:10px;letter-spacing:4px;color:#5C9E6F;margin-bottom:14px;text-transform:uppercase;">Documento confidencial · Docente</div>
     <h2 style="font-family:'Playfair Display',serif;font-size:20px;color:#1C1005;margin-bottom:6px;">La composición</h2>
-    <p style="font-family:'EB Garamond',serif;font-style:italic;font-size:14px;color:#8B7355;margin-bottom:28px;line-height:1.55;">Nivel 1 · Contraseñas y pistas</p>
+    <p style="font-family:'EB Garamond',serif;font-style:italic;font-size:14px;color:#4A7A5A;margin-bottom:28px;line-height:1.55;">Nivel 3 · Contraseñas y pistas</p>
     <form onsubmit="checkPw(event)" style="display:flex;flex-direction:column;gap:12px;">
       <input type="password" id="pw-input" placeholder="Contraseña..." autocomplete="off" autofocus
-        style="padding:12px 16px;font-family:'Special Elite',monospace;font-size:17px;letter-spacing:4px;border:2px solid #C4813A;background:#FDF9F3;color:#1C1005;outline:none;text-align:center;width:100%;box-sizing:border-box;" />
-      <button type="submit" style="background:#C4813A;color:#0D0906;border:none;padding:13px;font-family:'Special Elite',monospace;font-size:13px;letter-spacing:3px;cursor:pointer;width:100%;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''">ACCEDER</button>
+        style="padding:12px 16px;font-family:'Special Elite',monospace;font-size:17px;letter-spacing:4px;border:2px solid #5C9E6F;background:#F2FAF5;color:#1C1005;outline:none;text-align:center;width:100%;box-sizing:border-box;" />
+      <button type="submit" style="background:#5C9E6F;color:#0D0906;border:none;padding:13px;font-family:'Special Elite',monospace;font-size:13px;letter-spacing:3px;cursor:pointer;width:100%;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''">ACCEDER</button>
     </form>
     <p id="pw-err" style="font-family:'EB Garamond',serif;font-style:italic;font-size:13px;color:#8B3A3A;margin-top:14px;min-height:18px;opacity:0;transition:opacity 0.25s;">Contraseña incorrecta. Inténtalo de nuevo.</p>
   </div>
@@ -288,9 +236,9 @@
 <div class="page">
 
   <!-- Header -->
-  <div class="doc-eyebrow">Documento de uso docente · Confidencial</div>
+  <div class="doc-eyebrow">Documento de uso docente · Confidencial · Nivel 3</div>
   <h1 class="doc-title">La composición</h1>
-  <p class="doc-subtitle">Antonio Skármeta · Escape Room · Español Q1</p>
+  <p class="doc-subtitle">Antonio Skármeta · Escape Room · Nivel 3 — Historia y análisis</p>
   <hr class="doc-divider" />
 
   <!-- Meta info -->
@@ -300,12 +248,12 @@
       <span><em>La composición</em>, A. Skármeta (1999)</span>
     </div>
     <div class="info-item">
-      <label>Nivel</label>
-      <span>B1 · Q1 (12.º grado) · NRW Abitur</span>
+      <label>Nivel del juego</label>
+      <span>Nivel 3 · Historia y análisis</span>
     </div>
     <div class="info-item">
       <label>Duración estimada</label>
-      <span>~25 minutos</span>
+      <span>~30 minutos</span>
     </div>
     <div class="info-item">
       <label>Número de salas</label>
@@ -320,80 +268,80 @@
     <div class="room-row">
       <div class="room-number">01</div>
       <div class="room-info">
-        <div class="room-title">El cuarto de Pedro</div>
-        <div class="room-subtitle">Chile, octubre de 1973</div>
-        <div class="room-question">¿Cuál es el nombre del mejor amigo de Pedro, el hijo del almacenero?</div>
+        <div class="room-title">El 11 de septiembre de 1973</div>
+        <div class="room-subtitle">El día que cambió Chile</div>
+        <div class="room-question">¿Cómo se llama el Palacio de Gobierno de Chile que fue bombardeado durante el golpe del 11 de septiembre de 1973?</div>
         <div class="room-hints">
-          <div class="room-hint"><strong>Pista 1:</strong> Busca el nombre del mejor amigo de Pedro. Aparece en dos documentos distintos.</div>
-          <div class="room-hint"><strong>Pista 2:</strong> El nombre está en la carta personal Y en el cuaderno escolar: el amigo que juega de arquero.</div>
+          <div class="room-hint"><strong>Pista 1:</strong> Busca el nombre del Palacio de Gobierno de Chile bombardeado el día del golpe.</div>
+          <div class="room-hint"><strong>Pista 2:</strong> El presidente Allende murió defendiendo ese edificio. Su nombre es el de una moneda. ¿Cómo se llama?</div>
         </div>
       </div>
       <div class="password-cell">
-        <span class="password-badge" style="color:#C4813A; border-color:#C4813A;">DANIEL</span>
+        <span class="password-badge" style="color:#7BA7BC; border-color:#7BA7BC;">MONEDA</span>
       </div>
     </div>
 
     <div class="room-row">
       <div class="room-number">02</div>
       <div class="room-info">
-        <div class="room-title">La calle del barrio</div>
-        <div class="room-subtitle">Un día de octubre — la detención</div>
-        <div class="room-question">¿Contra qué dice Daniel que estaba su padre? (una sola palabra)</div>
+        <div class="room-title">Salvador Allende</div>
+        <div class="room-subtitle">El presidente que la radio defendía</div>
+        <div class="room-question">¿Cómo se llamaba el presidente democrático de Chile derrocado en 1973? (su apellido)</div>
         <div class="room-hints">
-          <div class="room-hint"><strong>Pista 1:</strong> Busca la palabra que Daniel usa para explicar por qué se llevaron a su padre.</div>
-          <div class="room-hint"><strong>Pista 2:</strong> En el diálogo del libro y en el periódico encontrarás la misma palabra clave.</div>
+          <div class="room-hint"><strong>Pista 1:</strong> Busca en los documentos el nombre del presidente democrático de Chile que fue derrocado en el golpe de septiembre de 1973.</div>
+          <div class="room-hint"><strong>Pista 2:</strong> El padre de Pedro apoyaba a este presidente. Por eso está "contra la dictadura". ¿Cómo se llamaba ese presidente?</div>
         </div>
       </div>
       <div class="password-cell">
-        <span class="password-badge" style="color:#7BA7BC; border-color:#7BA7BC;">DICTADURA</span>
+        <span class="password-badge" style="color:#C4813A; border-color:#C4813A; font-size:12px; letter-spacing:2px;">ALLENDE</span>
       </div>
     </div>
 
     <div class="room-row">
       <div class="room-number">03</div>
       <div class="room-info">
-        <div class="room-title">La sala de casa</div>
-        <div class="room-subtitle">La noche después de la detención</div>
-        <div class="room-question">¿Con qué objeto compara Pedro el momento en que todas las piezas encajan? (una palabra)</div>
+        <div class="room-title">La dictadura de Pinochet</div>
+        <div class="room-subtitle">El general Perdomo tiene nombre real</div>
+        <div class="room-question">¿Cómo se apellidaba el general que lideró el golpe y gobernó Chile como dictador durante 17 años?</div>
         <div class="room-hints">
-          <div class="room-hint"><strong>Pista 1:</strong> ¿Qué imagen usa Pedro para describir el momento en que todo empieza a tener sentido?</div>
-          <div class="room-hint"><strong>Pista 2:</strong> En el extracto de la novela, Pedro usa una metáfora específica cuando escucha la radio.</div>
+          <div class="room-hint"><strong>Pista 1:</strong> Busca en los documentos el nombre del general real que lideró el golpe y gobernó Chile 17 años.</div>
+          <div class="room-hint"><strong>Pista 2:</strong> El texto sobre el régimen militar menciona su nombre completo. Buscad el apellido del general que tomó el poder en septiembre de 1973.</div>
         </div>
       </div>
       <div class="password-cell">
-        <span class="password-badge" style="color:#D4A843; border-color:#D4A843; font-size:11px; letter-spacing:1.5px;">ROMPECABEZAS</span>
+        <span class="password-badge" style="color:#8B3A3A; border-color:#8B3A3A; font-size:11px; letter-spacing:1.5px;">PINOCHET</span>
       </div>
     </div>
 
     <div class="room-row">
       <div class="room-number">04</div>
       <div class="room-info">
-        <div class="room-title">La escuela — el capitán Romo</div>
-        <div class="room-subtitle">Al día siguiente — la trampa</div>
-        <div class="room-question">¿Cómo se llama el general de parte del cual viene el capitán Romo? (su apellido)</div>
+        <div class="room-title">La radio y la resistencia</div>
+        <div class="room-subtitle">Por qué la radio verde era peligrosa</div>
+        <div class="room-question">¿Desde qué ciudad soviética emitía la radio clandestina que escuchaban las familias opositoras en Chile?</div>
         <div class="room-hints">
-          <div class="room-hint"><strong>Pista 1:</strong> El capitán Romo dice que viene de parte de alguien. ¿Quién es esa persona?</div>
-          <div class="room-hint"><strong>Pista 2:</strong> El capitán dice que la medalla la dará 'la propia mano del general…'</div>
+          <div class="room-hint"><strong>Pista 1:</strong> Busca desde qué ciudad soviética emitía la radio que muchas familias chilenas opositoras escuchaban clandestinamente.</div>
+          <div class="room-hint"><strong>Pista 2:</strong> El texto sobre las radios clandestinas menciona dos emisoras extranjeras principales. Una es la BBC de Londres, la otra es de una ciudad soviética. ¿Cuál?</div>
         </div>
       </div>
       <div class="password-cell">
-        <span class="password-badge" style="color:#8B3A3A; border-color:#8B3A3A;">PERDOMO</span>
+        <span class="password-badge" style="color:#D4A843; border-color:#D4A843;">MOSCÚ</span>
       </div>
     </div>
 
     <div class="room-row">
       <div class="room-number">05</div>
       <div class="room-info">
-        <div class="room-title">La composición de Pedro</div>
-        <div class="room-subtitle">La decisión más importante</div>
-        <div class="room-question">¿Qué inventó Pedro que juegan sus padres por las noches en la composición? (una palabra)</div>
+        <div class="room-title">Antonio Skármeta y el exilio</div>
+        <div class="room-subtitle">El autor que escribió desde el dolor</div>
+        <div class="room-question">¿Qué tuvo que hacer Skármeta — como muchos intelectuales chilenos — después del golpe de 1973? (una palabra)</div>
         <div class="room-hints">
-          <div class="room-hint"><strong>Pista 1:</strong> ¿Qué juego inventó Pedro que juegan sus padres por las noches?</div>
-          <div class="room-hint"><strong>Pista 2:</strong> Lee la composición oficial de Pedro: sus padres hacen algo en el sillón. ¿Qué?</div>
+          <div class="room-hint"><strong>Pista 1:</strong> Busca lo que le ocurrió a Skármeta y a muchos intelectuales chilenos después del golpe de 1973.</div>
+          <div class="room-hint"><strong>Pista 2:</strong> El texto biográfico sobre Skármeta explica que tuvo que salir de Chile. ¿Qué se llama ese acto de tener que marcharse forzosamente de tu país?</div>
         </div>
       </div>
       <div class="password-cell">
-        <span class="password-badge" style="color:#5C9E6F; border-color:#5C9E6F;">AJEDREZ</span>
+        <span class="password-badge" style="color:#5C9E6F; border-color:#5C9E6F;">EXILIO</span>
       </div>
     </div>
 
@@ -415,15 +363,14 @@
 
   <!-- Footer -->
   <div class="doc-footer">
-    <span>Escape Room · La composición · A. Skármeta · Nivel 1</span>
+    <span>Escape Room · La composición · A. Skármeta · Nivel 3</span>
     <span>Español Q1 · NRW Gesamtschule Bonn</span>
   </div>
 
   <!-- Level navigation -->
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--rule);display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
-    <span style="font-family:'Special Elite',monospace;font-size:9px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;align-self:center;">Otros niveles:</span>
-    <a href="Contraseñas2.html" style="font-family:'Special Elite',monospace;font-size:10px;letter-spacing:2px;color:var(--amber);text-decoration:none;border-bottom:1px solid currentColor;padding-bottom:1px;">Nivel 2 — Los personajes →</a>
-    <a href="Contraseñas3.html" style="font-family:'Special Elite',monospace;font-size:10px;letter-spacing:2px;color:var(--amber);text-decoration:none;border-bottom:1px solid currentColor;padding-bottom:1px;">Nivel 3 — Historia y análisis →</a>
+    <a href="Contraseñas.html" style="font-family:'Special Elite',monospace;font-size:10px;letter-spacing:2px;color:var(--amber);text-decoration:none;border-bottom:1px solid currentColor;padding-bottom:1px;">← Nivel 1 — La historia</a>
+    <a href="Contraseñas2.html" style="font-family:'Special Elite',monospace;font-size:10px;letter-spacing:2px;color:var(--amber);text-decoration:none;border-bottom:1px solid currentColor;padding-bottom:1px;">← Nivel 2 — Los personajes</a>
   </div>
 
 </div>
@@ -447,7 +394,7 @@
       document.getElementById('pw-input').style.borderColor = '#8B3A3A';
       document.getElementById('pw-err').style.opacity = '1';
       setTimeout(() => {
-        document.getElementById('pw-input').style.borderColor = '#C4813A';
+        document.getElementById('pw-input').style.borderColor = '#5C9E6F';
         document.getElementById('pw-err').style.opacity = '0';
       }, 2200);
     }
