@@ -450,13 +450,13 @@ function EscapeRoom() {
   if (screen === "intro") {
     return (
       <div style={{ minHeight: "100vh", background: "linear-gradient(to bottom, #F0E8D4 0%, #E8DCC4 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 24px", animation: "fadeUp 0.45s ease forwards" }}>
-        <div style={{ maxWidth: 600, width: "100%" }}>
-          <div style={{ background: "rgba(196,129,58,0.08)", border: "1px solid rgba(196,129,58,0.32)", padding: "30px 36px", marginBottom: 28 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--ff-mono)", fontSize: 10, letterSpacing: 4, color: "#C4813A", marginBottom: 20 }}>
+        <div style={{ maxWidth: 860, width: "100%" }}>
+          <div style={{ background: "rgba(196,129,58,0.10)", border: "1px solid rgba(196,129,58,0.40)", padding: "30px 36px", marginBottom: 28 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--ff-mono)", fontSize: 10, letterSpacing: 4, color: "#8B4A10", marginBottom: 20 }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#C4813A", animation: "pulse 1.6s infinite" }} />
               EL RADIO DICE:
             </div>
-            <p style={{ fontFamily: "var(--ff-body)", fontSize: "clamp(15px,2vw,17px)", lineHeight: 1.85, color: "#C9B99A" }}>
+            <p style={{ fontFamily: "var(--ff-body)", fontSize: "clamp(15px,2vw,17px)", lineHeight: 1.85, color: "#2A1A08" }}>
               Hola. Soy la radio verde que escucha la familia de Pedro por las noches.<br /><br />
               Pedro es un niño de <strong style={{ color: "#8B4A10" }}>9 años</strong> que vive en Chile en 1973. Desde que los <strong style={{ color: "#8B4A10" }}>militares</strong> tomaron el Gobierno, algo ha cambiado: vecinos detenidos, miedos en silencio, una radio que dice la verdad en secreto.<br /><br />
               Hoy, un capitán entró en su escuela con una misión: pedir a los niños que escriban una composición sobre <em>"lo que hace su familia por las noches."</em><br /><br />
@@ -464,7 +464,7 @@ function EscapeRoom() {
             </p>
           </div>
 
-          <div style={{ background: "rgba(196,129,58,0.07)", border: "1px solid rgba(196,129,58,0.22)", padding: "14px 20px", marginBottom: 28, fontFamily: "var(--ff-mono)", fontSize: 11, letterSpacing: 1, color: "#5A3810", lineHeight: 1.6 }}>
+          <div style={{ background: "rgba(196,129,58,0.10)", border: "1px solid rgba(196,129,58,0.35)", padding: "14px 20px", marginBottom: 28, fontFamily: "var(--ff-mono)", fontSize: 11, letterSpacing: 1, color: "#3A2010", lineHeight: 1.6 }}>
             📓 Usad el <strong style={{ color: "#C4813A" }}>Cuaderno de notas</strong> en la parte de abajo para recordar las pistas importantes.
           </div>
 
@@ -588,9 +588,10 @@ function EscapeRoom() {
       </header>
 
       {/* ── MAIN ── */}
-      <main style={{ position: "relative", zIndex: 1, flex: 1, padding: "16px 20px 180px", display: "flex", flexDirection: "column", gap: 14 }}>
+      <main className="game-main" style={{ position: "relative", zIndex: 1, flex: 1, padding: "16px 20px 180px", display: "flex", flexDirection: "column", gap: 14 }}>
 
-        {/* ── SCENE ── */}
+        {/* ── SCENE COL ── */}
+        <div className="game-scene-col">
         <div style={{ position: "relative", width: "100%", paddingBottom: "58%", border: `1px solid ${room.accentColor}1a`, overflow: "hidden", borderRadius: 2 }}>
           {/* Vignette */}
           <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,0,0,0.5) 100%)", pointerEvents: "none", zIndex: 2 }} />
@@ -631,8 +632,10 @@ function EscapeRoom() {
             );
           })}
         </div>
+        </div>{/* /game-scene-col */}
 
-        {/* ── PASSWORD PANEL ── */}
+        {/* ── PASSWORD COL ── */}
+        <div className="game-pw-col">
         <div style={{ background: "rgba(0,0,0,0.42)", border: `1px solid ${room.accentColor}30`, backdropFilter: "blur(10px)", padding: "20px 20px", borderRadius: 2 }}>
           <div style={{ fontFamily: "var(--ff-mono)", fontSize: 10, letterSpacing: 4, color: room.accentColor, marginBottom: 8 }}>
             🔐 CERRADURA DE LA SALA
@@ -674,6 +677,7 @@ function EscapeRoom() {
             </div>
           )}
         </div>
+        </div>{/* /game-pw-col */}
       </main>
 
       {/* ── RADIO BUBBLE ── */}

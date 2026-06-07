@@ -67,6 +67,38 @@
       .hotspot span:first-child { font-size: clamp(18px, 7vw, 24px) !important; }
     }
 
+    /* ── Desktop layout (laptop full-screen) ───────────────────── */
+    @media (min-width: 1024px) {
+      .game-main {
+        flex-direction: row !important;
+        align-items: flex-start !important;
+        padding: 20px 28px 80px !important;
+        gap: 22px !important;
+      }
+      .game-scene-col {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+      .game-pw-col {
+        width: 360px;
+        flex-shrink: 0;
+        position: sticky;
+        top: 20px;
+      }
+      /* Radio bubble: anchor to right of screen above notebook */
+      .radio-bubble {
+        left: auto !important;
+        right: 28px !important;
+        max-width: 380px !important;
+        bottom: 64px !important;
+      }
+    }
+
+    @media (min-width: 1280px) {
+      .game-pw-col { width: 400px; }
+      .game-main { padding: 24px 40px 80px !important; }
+    }
+
     /* ── Film-grain overlay ─────────────────────────────────────── */
     .grain {
       position: fixed; inset: 0; pointer-events: none; z-index: 999;
