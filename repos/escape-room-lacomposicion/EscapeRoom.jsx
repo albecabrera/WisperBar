@@ -50,8 +50,8 @@ function DocumentModal({ hotspot, room, onClose }) {
       style={{
         background: cfg.paper,
         color: "#1C1005",
-        maxWidth: 620, width: "100%",
-        maxHeight: "88vh", overflowY: "auto",
+        maxWidth: "min(760px, 94vw)", width: "100%",
+        maxHeight: "92vh", overflowY: "auto",
         animation: "modalIn 0.28s cubic-bezier(0.34,1.3,0.64,1) forwards",
         position: "relative",
         boxShadow: "0 40px 100px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,0,0,0.15)",
@@ -675,11 +675,43 @@ function EscapeRoom() {
 
         {/* ── SCENE COL ── */}
         <div className="game-scene-col">
-          <div style={{ position: "relative", width: "100%", paddingBottom: "58%", border: `1px solid ${room.accentColor}1a`, overflow: "hidden", borderRadius: 2 }}>
+          <div className="game-scene" style={{ position: "relative", width: "100%", paddingBottom: "58%", border: `1px solid ${room.accentColor}1a`, overflow: "hidden", borderRadius: 2 }}>
             <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,0,0,0.5) 100%)", pointerEvents: "none", zIndex: 2 }} />
             <div style={{ position: "absolute", bottom: 8, right: 12, fontFamily: "var(--ff-mono)", fontSize: 8, letterSpacing: 3, color: room.accentColor, opacity: 0.25, textTransform: "uppercase", pointerEvents: "none", zIndex: 3 }}>{room.title}</div>
             <div style={{ position: "absolute", top: 10, right: 12, fontFamily: "var(--ff-mono)", fontSize: 10, letterSpacing: 2, color: allFound ? "#5C9E6F" : room.accentColor, zIndex: 3, background: "rgba(0,0,0,0.45)", padding: "3px 8px", borderRadius: 2 }}>
               {foundRelevant}/{relevantHotspots.length} pistas
+            </div>
+
+            {/* Padlock */}
+            <div style={{ position: "absolute", bottom: "8%", left: "50%", transform: "translateX(-50%)", zIndex: 4, pointerEvents: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+              <div style={{
+                background: solvedRooms.includes(currentRoom) ? "rgba(92,158,111,0.18)" : "rgba(0,0,0,0.42)",
+                border: `1.5px solid ${solvedRooms.includes(currentRoom) ? "rgba(92,158,111,0.55)" : room.accentColor + "44"}`,
+                borderRadius: 12,
+                padding: "7px 14px 6px",
+                backdropFilter: "blur(8px)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 2,
+                transition: "background 0.6s ease, border-color 0.6s ease",
+              }}>
+                <span
+                  key={`lock-${currentRoom}-${pwState}`}
+                  style={{
+                    fontSize: "clamp(22px, 3.2vw, 36px)",
+                    lineHeight: 1,
+                    display: "block",
+                    animation: pwState === "success" ? "padlockUnlock 0.7s cubic-bezier(0.34,1.56,0.64,1) forwards" : "none",
+                    filter: solvedRooms.includes(currentRoom) ? "drop-shadow(0 0 6px rgba(92,158,111,0.75))" : "none",
+                  }}
+                >
+                  {solvedRooms.includes(currentRoom) ? "🔓" : "🔒"}
+                </span>
+                <span style={{ fontFamily: "var(--ff-mono)", fontSize: "clamp(5px, 0.75vw, 8px)", letterSpacing: 2, color: solvedRooms.includes(currentRoom) ? "#5C9E6F" : room.accentColor + "88", textTransform: "uppercase" }}>
+                  {solvedRooms.includes(currentRoom) ? "abierta" : "cerrada"}
+                </span>
+              </div>
             </div>
 
             {room.hotspots.map(hs => {
