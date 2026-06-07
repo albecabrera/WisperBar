@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>La Composición — Escape Room</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Special+Elite&family=EB+Garamond:ital,wght@0,400;1,400&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <style>
+    /* ── Variables & Reset ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ff-display : 'Playfair Display', Georgia, serif;
+      --ff-mono    : 'Special Elite', 'Courier New', monospace;
+      --ff-body    : 'EB Garamond', Georgia, serif;
+      --ff-ui      : 'Space Grotesk', system-ui, sans-serif;
+      --ff-hand    : 'Caveat', cursive;
+    }
+
+    html, body, #root { height: 100%; }
+
+    body {
+      background: #0D0906;
+      color: #E8D5B0;
+      /* Cover-inspired palette vars */
+      --cover-sky:   #7AAFC3;
+      --cover-ochre: #C4913A;
+      --cover-olive: #7A8A5A;
+      --cover-paper: #EDE8D8;
+      font-family: var(--ff-body);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.32); }
+
+    /* ── Animations ────────────────────────────────────────────── */
+    @keyframes fadeIn    { from { opacity: 0; }                             to { opacity: 1; } }
+    @keyframes fadeUp    { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes shake     { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-5px)} 40%,80%{transform:translateX(5px)} }
+    @keyframes pulse     { 0%,100%{opacity:1} 50%{opacity:0.45} }
+    @keyframes radioWave { from { transform:scale(1); opacity:0.7; } to { transform:scale(2.8); opacity:0; } }
+    @keyframes modalIn   { from { opacity:0; transform:translateY(22px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }
+
+    /* ── Mobile typography ─────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .hotspot { border-radius: 6px; }
+      .hotspot span:first-child { font-size: clamp(20px, 6vw, 32px) !important; }
+      .hotspot span:nth-child(2) { font-size: clamp(9px, 2.2vw, 11px) !important; }
+      .pw-input { font-size: 18px !important; padding: 12px 14px !important; }
+      .btn-submit { padding: 12px 16px !important; font-size: 13px !important; }
+      .btn-primary { font-size: 13px !important; padding: 14px 28px !important; letter-spacing: 2px !important; }
+      .radio-bubble { bottom: 80px !important; }
+      .notebook-tab { padding: 10px 16px !important; font-size: 13px !important; }
+    }
+    @media (max-width: 400px) {
+      .hotspot span:first-child { font-size: clamp(18px, 7vw, 24px) !important; }
+    }
+
+    /* ── Film-grain overlay ─────────────────────────────────────── */
+    .grain {
+      position: fixed; inset: 0; pointer-events: none; z-index: 999;
+      opacity: 0.028;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ── Hotspot buttons ────────────────────────────────────────── */
+    .hotspot {
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 6px 5px 5px;
+      border-radius: 3px;
+      transition: transform 0.22s, box-shadow 0.22s, background 0.2s, border-color 0.2s;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.24), 0 0 0 1px rgba(255,255,255,0.06);
+    }
+    .hotspot:hover {
+      background: rgba(248,240,222,0.97) !important;
+      border-color: var(--room-accent, #C4813A) !important;
+      transform: scale(1.07) translateY(-3px);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.36);
+    }
+    .hotspot:active { transform: scale(0.97) translateY(0); }
+
+    /* ── Primary button ─────────────────────────────────────────── */
+    .btn-primary {
+      background: var(--accent, #C4813A);
+      color: #0D0906;
+      border: none;
+      padding: 13px 40px;
+      font-family: var(--ff-mono);
+      font-size: 14px;
+      letter-spacing: 3px;
+      cursor: pointer;
+      border-radius: 2px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: filter 0.18s, transform 0.18s;
+    }
+    .btn-primary:hover  { filter: brightness(1.12); transform: scale(1.02); }
+    .btn-primary:active { transform: scale(0.98); }
+
+    /* ── Submit button ──────────────────────────────────────────── */
+    .btn-submit {
+      background: var(--accent, #C4813A);
+      color: #0D0906;
+      border: none;
+      padding: 10px 18px;
+      font-family: var(--ff-mono);
+      font-size: 12px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      border-radius: 2px;
+      white-space: nowrap;
+      transition: filter 0.18s;
+    }
+    .btn-submit:hover { filter: brightness(1.1); }
+
+    /* ── Password input ─────────────────────────────────────────── */
+    .pw-input {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.22);
+      color: #E8D5B0;
+      padding: 10px 14px;
+      font-family: var(--ff-mono);
+      font-size: 15px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      border-radius: 2px;
+      outline: none;
+      transition: border-color 0.25s;
+      min-width: 0;
+    }
+    .pw-input:focus               { border-color: rgba(255,255,255,0.5); }
+    .pw-input.error               { border-color: #8B3A3A !important; animation: shake 0.38s ease; }
+    .pw-input.success             { border-color: #5C9E6F !important; }
+
+    /* ── Tip box ────────────────────────────────────────────────── */
+    .btn-tip {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.13);
+      color: rgba(255,255,255,0.48);
+      padding: 7px 14px;
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      width: 100%;
+      border-radius: 2px;
+      transition: border-color 0.18s, color 0.18s;
+    }
+    .btn-tip:hover { border-color: rgba(255,255,255,0.32); color: rgba(255,255,255,0.8); }
+
+    .tip-box {
+      background: color-mix(in srgb, var(--accent, #C4813A) 10%, transparent);
+      border-left: 3px solid color-mix(in srgb, var(--accent, #C4813A) 60%, transparent);
+      padding: 10px 14px;
+      font-family: var(--ff-body);
+      font-style: italic;
+      font-size: 14px;
+      color: #C9B99A;
+      line-height: 1.65;
+      border-radius: 0 2px 2px 0;
+    }
+
+    /* ── Radio bubble ───────────────────────────────────────────── */
+    .radio-bubble {
+      position: fixed;
+      bottom: 70px;
+      left: 16px; right: 16px;
+      max-width: 520px;
+      margin: 0 auto;
+      background: rgba(8,5,2,0.96);
+      border: 1px solid color-mix(in srgb, var(--accent, #C4813A) 55%, transparent);
+      backdrop-filter: blur(14px);
+      padding: 13px 18px;
+      z-index: 30;
+      animation: fadeUp 0.28s ease forwards;
+      border-radius: 2px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+
+    /* ── Notebook tab & content ─────────────────────────────────── */
+    .notebook-tab {
+      background: #C4813A;
+      color: #0D0906;
+      border: none;
+      padding: 8px 18px;
+      font-family: var(--ff-mono);
+      font-size: 12px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      transition: background 0.18s;
+    }
+    .notebook-tab:hover { background: #D4A843; }
+
+    .note-count {
+      background: rgba(0,0,0,0.25);
+      border-radius: 10px;
+      padding: 1px 7px;
+      font-size: 11px;
+    }
+
+    .notebook-content {
+      background: #0C0703;
+      border-top: 2px solid #C4813A;
+      padding: 14px 20px;
+      max-height: 210px;
+      overflow-y: auto;
+      /* Ruled lines */
+      background-image: repeating-linear-gradient(transparent, transparent 27px, rgba(139,115,85,0.08) 27px, rgba(139,115,85,0.08) 28px);
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="game-data.js"></script>
+  <script type="text/babel" src="EscapeRoom.jsx"></script>
+</body>
+</html>

@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contraseñas — La Composición (Docente)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Special+Elite&family=EB+Garamond:ital,wght@0,400;1,400&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --amber:  #C4813A;
+      --dark:   #1C1005;
+      --paper:  #FBF6ED;
+      --rule:   #D4B896;
+      --muted:  #8B7355;
+    }
+
+    body {
+      background: #F0EAE0;
+      font-family: 'EB Garamond', Georgia, serif;
+      color: var(--dark);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page {
+      max-width: 760px;
+      margin: 40px auto;
+      background: var(--paper);
+      box-shadow: 0 4px 40px rgba(0,0,0,0.15);
+      padding: 52px 56px 60px;
+      position: relative;
+    }
+
+    /* Decorative corner marks */
+    .page::before, .page::after {
+      content: '';
+      position: absolute;
+      width: 24px; height: 24px;
+      border-color: var(--amber);
+      border-style: solid;
+    }
+    .page::before { top: 16px; left: 16px; border-width: 2px 0 0 2px; }
+    .page::after  { bottom: 16px; right: 16px; border-width: 0 2px 2px 0; }
+
+    /* Header */
+    .doc-eyebrow {
+      font-family: 'Special Elite', 'Courier New', monospace;
+      font-size: 10px;
+      letter-spacing: 5px;
+      color: var(--amber);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .doc-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 30px;
+      font-weight: 700;
+      color: var(--dark);
+      line-height: 1.2;
+      margin-bottom: 4px;
+    }
+    .doc-subtitle {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-style: italic;
+      font-size: 16px;
+      color: var(--muted);
+      margin-bottom: 28px;
+    }
+    .doc-divider {
+      border: none;
+      border-top: 2px solid var(--amber);
+      margin-bottom: 28px;
+    }
+    .doc-divider-light {
+      border: none;
+      border-top: 1px solid var(--rule);
+      margin: 24px 0;
+    }
+
+    /* Info box */
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 32px;
+      margin-bottom: 28px;
+    }
+    .info-item label {
+      font-family: 'Special Elite', monospace;
+      font-size: 9px;
+      letter-spacing: 3px;
+      color: var(--muted);
+      text-transform: uppercase;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .info-item span {
+      font-size: 15px;
+      color: var(--dark);
+    }
+
+    /* Room cards */
+    .rooms-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+    .room-row {
+      display: grid;
+      grid-template-columns: 28px 1fr 160px;
+      gap: 0 20px;
+      align-items: start;
+      padding: 18px 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .room-row:last-child { border-bottom: none; }
+
+    .room-number {
+      font-family: 'Special Elite', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--amber);
+      padding-top: 3px;
+      text-align: right;
+    }
+    .room-info { min-width: 0; }
+    .room-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--dark);
+      margin-bottom: 2px;
+    }
+    .room-subtitle {
+      font-family: 'EB Garamond', serif;
+      font-style: italic;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .room-question {
+      font-size: 13.5px;
+      color: #4A3520;
+      line-height: 1.5;
+    }
+    .room-hints {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .room-hint {
+      font-family: 'EB Garamond', serif;
+      font-style: italic;
+      font-size: 12.5px;
+      color: var(--muted);
+      padding-left: 10px;
+      border-left: 2px solid var(--rule);
+      line-height: 1.45;
+    }
+    .room-hint strong {
+      font-style: normal;
+      color: #6B5030;
+      font-weight: 600;
+    }
+
+    .password-cell {
+      text-align: center;
+      padding-top: 4px;
+    }
+    .password-badge {
+      display: inline-block;
+      padding: 6px 14px 7px;
+      border: 1.5px solid;
+      font-family: 'Special Elite', monospace;
+      font-size: 14px;
+      letter-spacing: 3px;
+      line-height: 1;
+    }
+
+    /* Notes area */
+    .notes-section {
+      margin-top: 28px;
+    }
+    .notes-label {
+      font-family: 'Special Elite', monospace;
+      font-size: 10px;
+      letter-spacing: 4px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .notes-lines {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+    .notes-line {
+      height: 32px;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    /* Footer */
+    .doc-footer {
+      margin-top: 36px;
+      padding-top: 16px;
+      border-top: 1px solid var(--rule);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: 'Special Elite', monospace;
+      font-size: 9px;
+      letter-spacing: 3px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    /* Print button */
+    .print-btn {
+      position: fixed;
+      top: 20px; right: 20px;
+      background: var(--amber);
+      color: #0D0906;
+      border: none;
+      padding: 10px 22px;
+      font-family: 'Special Elite', monospace;
+      font-size: 12px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      transition: filter 0.2s;
+      z-index: 100;
+    }
+    .print-btn:hover { filter: brightness(1.1); }
+
+    /* Back link */
+    .back-link {
+      position: fixed;
+      top: 22px; left: 20px;
+      font-family: 'Special Elite', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--amber); }
+
+    /* ── Print styles ─────────────────────────────────────────── */
+    @media print {
+      body { background: white; }
+      .page { margin: 0; box-shadow: none; padding: 32px 40px 40px; max-width: 100%; }
+      .print-btn, .back-link { display: none !important; }
+      .room-row { break-inside: avoid; }
+    }
+
+    @media (max-width: 640px) {
+      .page { margin: 0; padding: 32px 24px 40px; }
+      .info-grid { grid-template-columns: 1fr; }
+      .room-row { grid-template-columns: 24px 1fr; }
+      .password-cell { grid-column: 2; margin-top: 10px; text-align: left; }
+      .print-btn, .back-link { position: static; display: inline-block; margin: 12px 8px 0; }
+      body { padding: 0; }
+      .page::before, .page::after { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<a href="index.html" class="back-link">← Volver al juego</a>
+<button class="print-btn" onclick="window.print()">🖨 Imprimir</button>
+
+<div class="page">
+
+  <!-- Header -->
+  <div class="doc-eyebrow">Documento de uso docente · Confidencial</div>
+  <h1 class="doc-title">La composición</h1>
+  <p class="doc-subtitle">Antonio Skármeta · Escape Room · Español Q1</p>
+  <hr class="doc-divider" />
+
+  <!-- Meta info -->
+  <div class="info-grid">
+    <div class="info-item">
+      <label>Novela</label>
+      <span><em>La composición</em>, A. Skármeta (1999)</span>
+    </div>
+    <div class="info-item">
+      <label>Nivel</label>
+      <span>B1 · Q1 (12.º grado) · NRW Abitur</span>
+    </div>
+    <div class="info-item">
+      <label>Duración estimada</label>
+      <span>~25 minutos</span>
+    </div>
+    <div class="info-item">
+      <label>Número de salas</label>
+      <span>5 salas</span>
+    </div>
+  </div>
+  <hr class="doc-divider-light" />
+
+  <!-- Rooms -->
+  <div class="rooms-grid">
+
+    <div class="room-row">
+      <div class="room-number">01</div>
+      <div class="room-info">
+        <div class="room-title">El cuarto de Pedro</div>
+        <div class="room-subtitle">Chile, octubre de 1973</div>
+        <div class="room-question">¿Cuál es el nombre del mejor amigo de Pedro, el hijo del almacenero?</div>
+        <div class="room-hints">
+          <div class="room-hint"><strong>Pista 1:</strong> Busca el nombre del mejor amigo de Pedro. Aparece en dos documentos distintos.</div>
+          <div class="room-hint"><strong>Pista 2:</strong> El nombre está en la carta personal Y en el cuaderno escolar: el amigo que juega de arquero.</div>
+        </div>
+      </div>
+      <div class="password-cell">
+        <span class="password-badge" style="color:#C4813A; border-color:#C4813A;">DANIEL</span>
+      </div>
+    </div>
+
+    <div class="room-row">
+      <div class="room-number">02</div>
+      <div class="room-info">
+        <div class="room-title">La calle del barrio</div>
+        <div class="room-subtitle">Un día de octubre — la detención</div>
+        <div class="room-question">¿Contra qué dice Daniel que estaba su padre? (una sola palabra)</div>
+        <div class="room-hints">
+          <div class="room-hint"><strong>Pista 1:</strong> Busca la palabra que Daniel usa para explicar por qué se llevaron a su padre.</div>
+          <div class="room-hint"><strong>Pista 2:</strong> En el diálogo del libro y en el periódico encontrarás la misma palabra clave.</div>
+        </div>
+      </div>
+      <div class="password-cell">
+        <span class="password-badge" style="color:#7BA7BC; border-color:#7BA7BC;">DICTADURA</span>
+      </div>
+    </div>
+
+    <div class="room-row">
+      <div class="room-number">03</div>
+      <div class="room-info">
+        <div class="room-title">La sala de casa</div>
+        <div class="room-subtitle">La noche después de la detención</div>
+        <div class="room-question">¿Con qué objeto compara Pedro el momento en que todas las piezas encajan? (una palabra)</div>
+        <div class="room-hints">
+          <div class="room-hint"><strong>Pista 1:</strong> ¿Qué imagen usa Pedro para describir el momento en que todo empieza a tener sentido?</div>
+          <div class="room-hint"><strong>Pista 2:</strong> En el extracto de la novela, Pedro usa una metáfora específica cuando escucha la radio.</div>
+        </div>
+      </div>
+      <div class="password-cell">
+        <span class="password-badge" style="color:#D4A843; border-color:#D4A843; font-size:11px; letter-spacing:1.5px;">ROMPECABEZAS</span>
+      </div>
+    </div>
+
+    <div class="room-row">
+      <div class="room-number">04</div>
+      <div class="room-info">
+        <div class="room-title">La escuela — el capitán Romo</div>
+        <div class="room-subtitle">Al día siguiente — la trampa</div>
+        <div class="room-question">¿Cómo se llama el general de parte del cual viene el capitán Romo? (su apellido)</div>
+        <div class="room-hints">
+          <div class="room-hint"><strong>Pista 1:</strong> El capitán Romo dice que viene de parte de alguien. ¿Quién es esa persona?</div>
+          <div class="room-hint"><strong>Pista 2:</strong> El capitán dice que la medalla la dará 'la propia mano del general…'</div>
+        </div>
+      </div>
+      <div class="password-cell">
+        <span class="password-badge" style="color:#8B3A3A; border-color:#8B3A3A;">PERDOMO</span>
+      </div>
+    </div>
+
+    <div class="room-row">
+      <div class="room-number">05</div>
+      <div class="room-info">
+        <div class="room-title">La composición de Pedro</div>
+        <div class="room-subtitle">La decisión más importante</div>
+        <div class="room-question">¿Qué inventó Pedro que juegan sus padres por las noches en la composición? (una palabra)</div>
+        <div class="room-hints">
+          <div class="room-hint"><strong>Pista 1:</strong> ¿Qué juego inventó Pedro que juegan sus padres por las noches?</div>
+          <div class="room-hint"><strong>Pista 2:</strong> Lee la composición oficial de Pedro: sus padres hacen algo en el sillón. ¿Qué?</div>
+        </div>
+      </div>
+      <div class="password-cell">
+        <span class="password-badge" style="color:#5C9E6F; border-color:#5C9E6F;">AJEDREZ</span>
+      </div>
+    </div>
+
+  </div>
+  <!-- /rooms -->
+
+  <hr class="doc-divider-light" />
+
+  <!-- Notes -->
+  <div class="notes-section">
+    <div class="notes-label">Notas del docente</div>
+    <div class="notes-lines">
+      <div class="notes-line"></div>
+      <div class="notes-line"></div>
+      <div class="notes-line"></div>
+      <div class="notes-line"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="doc-footer">
+    <span>Escape Room · La composición · A. Skármeta</span>
+    <span>Español Q1 · NRW Gesamtschule Bonn</span>
+  </div>
+
+</div>
+</body>
+</html>
