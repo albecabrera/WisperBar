@@ -7,7 +7,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-arm64-lightgrey?style=flat-square)
 
-Aplicación nativa para la barra de menú de macOS que convierte tu voz en texto al instante y lo pega automáticamente donde estés escribiendo. Todo ocurre en tu máquina — sin servidores, sin internet, sin costos.
+Aplicación nativa para la barra de menú de macOS que convierte tu voz en texto al instante y lo pega automáticamente donde estés escribiendo. Incluye corrección inteligente de puntuación, detección de preguntas, y workflows LLM opcionales. Todo ocurre en tu máquina — sin servidores, sin internet, sin costos.
 
 ---
 
@@ -67,6 +67,64 @@ El audio **nunca sale** de este diagrama. No hay paso 5 que diga "enviar a la nu
 
 ---
 
+## Características principales (versión Python)
+
+### Comandos de puntuación hablados
+
+Decí el signo en voz alta y WisperBar lo convierte al símbolo. Funciona mezclando ES / EN / DE en el mismo dictado.
+
+| Lo que decís | Lo que aparece |
+|---|---|
+| "coma" / "Komma" / "comma" | `,` |
+| "punto" / "Punkt" / "period" / "full stop" | `.` |
+| "signo de interrogación" / "Fragezeichen" / "question mark" | `?` |
+| "signo de exclamación" / "Ausrufezeichen" / "exclamation mark" | `!` |
+| "abrir paréntesis" / "Klammer auf" / "open parenthesis" | `(` |
+| "cerrar paréntesis" / "Klammer zu" / "close parenthesis" | `)` |
+| "párrafo" / "Absatz" / "new paragraph" | salto de párrafo |
+
+### Detección automática de preguntas
+
+El módulo NLP analiza cada oración transcripta y aplica puntuación de pregunta automáticamente, sin que lo pidás:
+
+- **Palabras interrogativas** — "qué", "cómo", "por qué", "how", "what", "warum", etc. → agrega `?`
+- **Inversión verbo-sujeto** — "¿Tenés tiempo?" detectado aunque no se haya dicho el signo
+- **Apertura española** — agrega `¿` al inicio automáticamente en español
+- **Mayúsculas** — capitaliza el inicio de cada oración nueva y cada párrafo
+
+### Workflows LLM
+
+Seleccionable desde el menú o el panel de configuración. Cada workflow transforma el texto transcripto con un prompt especializado:
+
+| Workflow | Descripción |
+|---|---|
+| 🎙 Transcribir | Transcripción directa con puntuación corregida |
+| ✏️ Mejorar | Mejora redacción manteniendo el sentido |
+| 👔 Profesional | Reformula en tono formal |
+| 🧘 Desahogo | Transcribe sin filtros, ideal para notas privadas |
+| 😊 Emoji | Agrega emojis contextuales al texto |
+
+Los workflows requieren un LLM configurado (ver sección de proveedores).
+
+### Soporte multi-proveedor LLM
+
+WisperBar puede opcionalmente enviar el texto transcripto a un LLM para procesarlo. Las API keys se guardan en el **Keychain de macOS**, nunca en archivos de configuración.
+
+| Proveedor | Descripción |
+|---|---|
+| **Ollama** | LLM 100% local. Cero datos salen de tu máquina. Recomendado. |
+| **Anthropic** | Claude (Opus, Sonnet, Haiku) vía API |
+| **OpenAI** | GPT-4o, o1, o3, o4-mini y otros vía API |
+| **Generic** | Cualquier endpoint compatible con la API de OpenAI |
+
+Sin LLM configurado, WisperBar transcribe directamente sin procesar el texto.
+
+### Vocabulario técnico
+
+El modelo Whisper recibe un vocabulario de términos técnicos como guía de contexto (APIs, frameworks, términos de negocio) para mejorar la precisión en dictados técnicos en ES, EN y DE.
+
+---
+
 ## Tecnologías
 
 ### Stack principal
@@ -93,6 +151,20 @@ El audio **nunca sale** de este diagrama. No hay paso 5 que diga "enviar a la nu
 | **pynput** | Escucha teclas globales (la Opción derecha) aunque otra app esté en foco |
 | **pyperclip** | Copia texto al portapapeles (wraps NSPasteboard) |
 | **PyObjC** | Puente Python ↔ Objective-C; necesario para crear el overlay NSPanel sin Xcode |
+| **macOS Keychain** | Almacena API keys de LLMs de forma segura vía `security` CLI |
+
+#### Módulos internos
+
+| Módulo | Qué hace |
+|--------|----------|
+| `punctuation.py` | Reemplaza comandos hablados por símbolos de puntuación (ES/EN/DE) |
+| `sentence_parser.py` | Detecta preguntas y corrige apertura/cierre en ES/EN/DE |
+| `workflows.py` | Define los prompts de cada workflow LLM multiidioma |
+| `llm_service.py` | Cliente unificado para Ollama, Anthropic, OpenAI y endpoints genéricos |
+| `vocab.py` | Vocabulario técnico para guiar el reconocimiento de Whisper |
+| `config_panel.py` | Panel de configuración nativo (PyObjC): proveedor LLM, modelo, idioma, hotkey mode |
+| `i18n.py` | Internacionalización de la UI en ES / EN / DE |
+| `autostart.py` | Registra y gestiona el LaunchAgent de macOS |
 
 ### ¿Qué es MLX Whisper en palabras simples?
 
@@ -111,8 +183,10 @@ Este repositorio contiene dos implementaciones independientes:
 | **Ubicación** | `WisperBar/` | `wisperbar_py/` |
 | **Motor de voz** | SFSpeechRecognizer (Apple) | Whisper large-v3-turbo (OpenAI vía MLX) |
 | **Idiomas** | Español (`es-ES`) | Auto-detect + ES / EN / DE |
-| **Primer arranque** | Instantáneo | Descarga el modelo (~1.5 GB, solo la primera vez) |
+| **Primer arranque** | Instantáneo | Descarga el modelo (~800 MB, solo la primera vez) |
 | **Precisión** | Alta para español | Muy alta, multiidioma |
+| **NLP / puntuación** | No | Sí — comandos hablados + detección de preguntas |
+| **Workflows LLM** | No | Sí — Ollama / Anthropic / OpenAI / genérico |
 | **Cómo correr** | Xcode o `make run` | `./deploy.sh` |
 
 ---
@@ -133,8 +207,20 @@ Este repositorio contiene dos implementaciones independientes:
 | Iniciar dictado | Mantener **Opción derecha (⌥)** |
 | Detener y pegar | Soltar **Opción derecha (⌥)** |
 | Menú de opciones | Click en el ícono de la barra de menú |
+| Configuración | Primer ítem del menú desplegable |
 
-Al soltar la tecla, el texto transcripto se copia al portapapeles y se pega automáticamente en el campo activo.
+Al soltar la tecla, el texto transcripto se procesa (NLP + workflow LLM si está configurado), se copia al portapapeles y se pega automáticamente en el campo activo.
+
+### Panel de configuración
+
+Accesible desde el menú. Permite configurar:
+
+- **Proveedor LLM** — Ollama (local), Anthropic, OpenAI, o endpoint genérico
+- **Modelo** — selección dinámica según el proveedor
+- **API Key** — guardada en Keychain, nunca en disco
+- **Workflow activo** — el que se aplica a cada transcripción
+- **Idioma de la UI** — Español / English / Deutsch
+- **Modo hotkey** — hold (mantener) o toggle (presionar una vez)
 
 ---
 
