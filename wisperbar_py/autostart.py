@@ -29,8 +29,8 @@ _TEMPLATE = """\
     <true/>
     <key>KeepAlive</key>
     <dict>
-        <key>Crashed</key>
-        <true/>
+        <key>SuccessfulExit</key>
+        <false/>
     </dict>
     <key>ProcessType</key>
     <string>Interactive</string>
@@ -55,7 +55,7 @@ def is_registered() -> bool:
     return (
         sys.executable in content
         and str(_SCRIPT) in content
-        and "<key>Crashed</key>" in content  # plist con KeepAlive nuevo
+        and "<key>SuccessfulExit</key>" in content  # plist con KeepAlive nuevo
     )
 
 
