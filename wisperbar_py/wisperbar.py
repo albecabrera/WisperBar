@@ -29,7 +29,9 @@ from AppKit import (
     NSWindowCollectionBehaviorCanJoinAllSpaces,
     NSWindowCollectionBehaviorStationary,
     NSWindowCollectionBehaviorIgnoresCycle,
+    NSWindowCollectionBehaviorFullScreenAuxiliary,
     NSFloatingWindowLevel, NSStatusWindowLevel,
+    NSScreenSaverWindowLevel, NSEvent,
 )
 
 from llm_service import LLMService, LLMError, keychain_load, PROVIDER_LABELS
@@ -200,8 +202,9 @@ class WaveformView(NSView):
         # Fondo oscuro sólido — visible en modo claro y oscuro
         NSColor.colorWithRed_green_blue_alpha_(0.08, 0.08, 0.12, 0.94).setFill()
         pill.fill()
-        NSColor.colorWithRed_green_blue_alpha_(1.0, 1.0, 1.0, 0.18).setStroke()
-        pill.setLineWidth_(1.0)
+        # Borde claro marcado — separa el pill de fondos oscuros
+        NSColor.colorWithRed_green_blue_alpha_(1.0, 1.0, 1.0, 0.38).setStroke()
+        pill.setLineWidth_(1.5)
         pill.stroke()
 
         if mode == "processing":
@@ -251,30 +254,30 @@ class WaveformView(NSView):
 
 class WaveformOverlay:
 
+    SIZE = (460.0, 68.0)
+
     def __init__(self):
-        screen = NSScreen.mainScreen().frame()
-        sw     = screen.size.width
-        ow, oh = 460, 68
-        ox     = (sw - ow) / 2.0
-        oy     = 90.0
+        ow, oh = self.SIZE
 
         # NSWindowStyleMaskNonactivatingPanel = 128 — necesario para apps background
         style  = NSWindowStyleMaskBorderless | 128
 
         self._win = NSPanel.alloc().initWithContentRect_styleMask_backing_defer_(
-            ((ox, oy), (ow, oh)),
+            ((0.0, 0.0), (ow, oh)),
             style,
             NSBackingStoreBuffered,
             False,
         )
-        # NSStatusWindowLevel (25) — por encima de ventanas normales y Dock
-        self._win.setLevel_(NSStatusWindowLevel + 1)
+        # NSScreenSaverWindowLevel (1000) — por encima de toda app, incluso fullscreen
+        self._win.setLevel_(NSScreenSaverWindowLevel)
         self._win.setOpaque_(False)
         self._win.setBackgroundColor_(NSColor.clearColor())
+        # FullScreenAuxiliary: sin esto el overlay no aparece sobre Spaces fullscreen
         self._win.setCollectionBehavior_(
             NSWindowCollectionBehaviorCanJoinAllSpaces |
             NSWindowCollectionBehaviorStationary |
-            NSWindowCollectionBehaviorIgnoresCycle
+            NSWindowCollectionBehaviorIgnoresCycle |
+            NSWindowCollectionBehaviorFullScreenAuxiliary
         )
         self._win.setHasShadow_(True)
         self._win.setIgnoresMouseEvents_(True)
@@ -283,8 +286,26 @@ class WaveformOverlay:
 
         self._view = WaveformView.alloc().initWithFrame_(((0.0, 0.0), (ow, oh)))
         self._win.setContentView_(self._view)
+        self._reposition()
+
+    def _reposition(self):
+        # Pantalla donde está el cursor — ahí dicta el usuario
+        loc    = NSEvent.mouseLocation()
+        screen = NSScreen.mainScreen()
+        for s in NSScreen.screens():
+            f = s.frame()
+            if (f.origin.x <= loc.x <= f.origin.x + f.size.width and
+                    f.origin.y <= loc.y <= f.origin.y + f.size.height):
+                screen = s
+                break
+        f      = screen.frame()
+        ow, oh = self.SIZE
+        ox     = f.origin.x + (f.size.width - ow) / 2.0
+        oy     = f.origin.y + 90.0
+        self._win.setFrame_display_(((ox, oy), (ow, oh)), True)
 
     def show(self):
+        self._reposition()
         self._win.orderFrontRegardless()
 
     def hide(self):
