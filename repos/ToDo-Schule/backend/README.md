@@ -18,13 +18,13 @@ cp .env.example .env
 #   Secret erzeugen:  php -r "echo bin2hex(random_bytes(32));"
 
 # 3) REST-API starten (Entwicklung)
-php -S 0.0.0.0:8080 -t public      #  http://localhost:8080
+php -S 0.0.0.0:8085 -t public      #  http://127.0.0.1:8085
 
 # 4) WebSocket-Server starten (zweites Terminal)
 php bin/ws-server.php               #  ws://localhost:8090
 ```
 
-Healthcheck: `GET http://localhost:8080/health` → `{"status":"ok"}`.
+Healthcheck: `GET http://127.0.0.1:8085/health` → `{"status":"ok"}`.
 
 ---
 
@@ -100,7 +100,7 @@ erneuert ihn bei `401` automatisch über `/api/auth/refresh`:
 
 ```js
 // api.js — zentraler API-Client der PWA
-const API = 'http://localhost:8080';
+const API = 'http://127.0.0.1:8085';
 let accessToken  = localStorage.getItem('accessToken');
 let refreshToken = localStorage.getItem('refreshToken');
 

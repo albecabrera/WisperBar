@@ -2,9 +2,19 @@
 <html lang="de" data-theme="" data-accent="" data-density="">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>ToDo-Schule · Elisabeth-Selbert-Gesamtschule</title>
   <meta name="description" content="Kollaborative Aufgabenverwaltung für das Kollegium der ESG Bonn-Bad Godesberg">
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#312F80">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ToDo-Schule">
+  <link rel="apple-touch-icon" href="assets/esg-mark.svg">
+  <link rel="icon" href="assets/esg-mark.svg" type="image/svg+xml">
 
   <!-- fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,40 +26,17 @@
   <link rel="stylesheet" href="app/components.css">
   <link rel="stylesheet" href="app/screens.css">
   <link rel="stylesheet" href="app/overlays.css">
+  <link rel="stylesheet" href="app/notes.css">
   <link rel="stylesheet" href="app/responsive.css">
 
-  <!-- React + Babel -->
-  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <!-- React (Production, self-hosted — kein CDN, kein Babel zur Laufzeit) -->
+  <script defer src="vendor/react.production.min.js"></script>
+  <script defer src="vendor/react-dom.production.min.js"></script>
 
-  <template id="__bundler_thumbnail">
-    <svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
-      <rect width="160" height="160" fill="#312F80"/>
-      <rect x="20" y="38" width="120" height="84" rx="14" fill="#FFFFFF" opacity="0.1"/>
-      <rect x="32" y="52" width="52" height="8" rx="4" fill="#FFFFFF" opacity="0.8"/>
-      <rect x="32" y="68" width="36" height="6" rx="3" fill="#FD5266"/>
-      <rect x="32" y="82" width="80" height="6" rx="3" fill="#FFFFFF" opacity="0.5"/>
-      <rect x="32" y="96" width="64" height="6" rx="3" fill="#FFFFFF" opacity="0.4"/>
-      <circle cx="130" cy="38" r="10" fill="#8FFF53"/>
-    </svg>
-  </template>
+  <!-- App-Bundle (vorkompiliert via ./build.sh) -->
+  <script defer src="dist/app.min.js"></script>
 </head>
 <body>
   <div id="root"></div>
-
-  <!-- plain JS data (no Babel needed) -->
-  <script src="app/data.js"></script>
-
-  <!-- Babel-transpiled components (load order matters) -->
-  <script type="text/babel" src="tweaks-panel.jsx"></script>
-  <script type="text/babel" src="app/icons.jsx"></script>
-  <script type="text/babel" src="app/ui.jsx"></script>
-  <script type="text/babel" src="app/login.jsx"></script>
-  <script type="text/babel" src="app/shell.jsx"></script>
-  <script type="text/babel" src="app/taskviews.jsx"></script>
-  <script type="text/babel" src="app/drawer.jsx"></script>
-  <script type="text/babel" src="app/overlays.jsx"></script>
-  <script type="text/babel" src="app/app.jsx"></script>
 </body>
 </html>

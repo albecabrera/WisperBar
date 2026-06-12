@@ -152,7 +152,22 @@ const NOTIFICATIONS = [
 // who's viewing a task right now (live presence simulation)
 const VIEWERS = {1:[2,3], 5:[6], 2:[2]};
 
-window.ESG_DATA = { USERS, ME, TEAMS, TASKS, COMMENTS, ACTIVITY, NOTIFICATIONS, VIEWERS };
+const NOTES = [
+  {id:1, kind:"plan", title:"UV Deutsch 8b: Kurzgeschichten (KW 25–28)",
+    content:"Reihenplanung:\n1. Einstieg: 'Spaghetti für zwei' — Erwartungsbrüche\n2. Analyse: Erzählperspektive & innerer Monolog\n3. Produktion: eigenes Ende schreiben\n4. Klassenarbeit KW 28\n\nMaterial: Kopiervorlagen im Tauschordner.",
+    teamId:3, createdBy:3, authorName:"Lena Hoffmann", updatedAt:ago(4)},
+  {id:2, kind:"note", title:"Protokoll Fachschaft Mathe 10.06.",
+    content:"- Taschenrechner-Bestellung Jg. 7 bis 20.06.\n- Vera-8 Ergebnisse: Stärken Geometrie, Schwächen Stochastik\n- Förderkonzept: Tobias erstellt Entwurf bis nächste Sitzung.",
+    teamId:4, createdBy:4, authorName:"Tobias Reich", updatedAt:ago(20)},
+  {id:3, kind:"note", title:"Checkliste Elternsprechtag",
+    content:"□ Raumplan aushängen\n□ Klingelzeichen deaktivieren\n□ Getränke Lehrerzimmer\n□ Beschilderung Eingang\n□ Feedback-Bögen auslegen",
+    teamId:6, createdBy:1, authorName:"Anke Brandt", updatedAt:ago(30)},
+  {id:4, kind:"plan", title:"Projektwoche Nachhaltigkeit — Grobplanung",
+    content:"Mo: Auftakt Aula + Stationenlauf\nDi–Do: Projektgruppen (Garten, Upcycling, Energie-Detektive)\nFr: Präsentation + Eltern-Café\n\nOffene Fragen: Budget Material? Externe Referent:innen?",
+    teamId:7, createdBy:6, authorName:"Yusuf Demir", updatedAt:ago(50)},
+];
+
+window.ESG_DATA = { USERS, ME, TEAMS, TASKS, COMMENTS, ACTIVITY, NOTIFICATIONS, VIEWERS, NOTES };
 
 })();
 
@@ -161,7 +176,9 @@ window.ESG_DATA = { USERS, ME, TEAMS, TASKS, COMMENTS, ACTIVITY, NOTIFICATIONS, 
 // ========================================================================
 (function(){
 
-const API_BASE_URL = window.ESG_API_BASE || "http://localhost:8080";
+/* 127.0.0.1 statt localhost: localhost löst im Browser zuerst auf ::1 (IPv6)
+   auf — dort lauscht der XAMPP-Docker-Panel auf 8080, nicht unsere API. */
+const API_BASE_URL = window.ESG_API_BASE || "http://127.0.0.1:8085";
 
 let accessToken  = localStorage.getItem("accessToken");
 let refreshToken = localStorage.getItem("refreshToken");
@@ -231,9 +248,23 @@ function mapTask(t){
   };
 }
 
+/* Backend (snake_case) -> Frontend-Shape für Notizen */
+function mapNote(n){
+  return {
+    id:         Number(n.id),
+    kind:       n.kind || "note",
+    title:      n.title,
+    content:    n.content || "",
+    teamId:     n.team_id != null ? Number(n.team_id) : null,
+    createdBy:  Number(n.created_by),
+    authorName: n.author_name || "",
+    updatedAt:  n.updated_at,
+  };
+}
+
 const ESG_API = {
   BASE: API_BASE_URL,
-  hasSession, setTokens, clearTokens, mapTask, fetch: apiFetch,
+  hasSession, setTokens, clearTokens, mapTask, mapNote, fetch: apiFetch,
 
   // --- Auth ---------------------------------------------------------------
   async register(name, email, password){
@@ -241,8 +272,12 @@ const ESG_API = {
     setTokens(data);
     return data.user;
   },
-  async login(email, password){
-    const data = await apiFetch("/api/auth/login", {method:"POST", body:JSON.stringify({email, password})});
+  /* identifier = Lehrerkürzel ('ca') ODER E-Mail */
+  async login(identifier, password){
+    const body = identifier.includes("@")
+      ? {email: identifier, password}
+      : {abbreviation: identifier, password};
+    const data = await apiFetch("/api/auth/login", {method:"POST", body:JSON.stringify(body)});
     setTokens(data);
     return data.user;
   },
@@ -285,6 +320,29 @@ const ESG_API = {
   assign:   (id, userIds) => apiFetch(`/api/tasks/${id}/assign`,   {method:"PATCH", body:JSON.stringify({userIds})}),
   unassign: (id, userIds) => apiFetch(`/api/tasks/${id}/unassign`, {method:"PATCH", body:JSON.stringify({userIds})}),
 
+  // --- Notizen & Planungen ---------------------------------------------------------
+  async getNotes(filters = {}){
+    const q = new URLSearchParams(Object.entries(filters).filter(([,v])=>v!=null)).toString();
+    const {notes} = await apiFetch("/api/notes" + (q ? `?${q}` : ""));
+    return notes.map(mapNote);
+  },
+  async createNote({title, content, kind, teamId}){
+    const {note} = await apiFetch("/api/notes", {method:"POST", body:JSON.stringify({
+      title, content, kind, teamId: typeof teamId==="number" ? teamId : null,
+    })});
+    return mapNote(note);
+  },
+  async updateNote(id, patch){
+    const body = {};
+    if("title"   in patch) body.title   = patch.title;
+    if("content" in patch) body.content = patch.content;
+    if("kind"    in patch) body.kind    = patch.kind;
+    if("teamId"  in patch) body.teamId  = patch.teamId;
+    const {note} = await apiFetch(`/api/notes/${id}`, {method:"PATCH", body:JSON.stringify(body)});
+    return mapNote(note);
+  },
+  deleteNote: (id) => apiFetch(`/api/notes/${id}`, {method:"DELETE"}),
+
   // --- Kommentare ---------------------------------------------------------------
   getComments:   (taskId)       => apiFetch(`/api/tasks/${taskId}/comments`),
   addComment:    (taskId, text) => apiFetch(`/api/tasks/${taskId}/comments`, {method:"POST", body:JSON.stringify({text})}),
@@ -293,6 +351,8 @@ const ESG_API = {
   // --- Teams / Share / Audit ------------------------------------------------------
   createTeam: (name)        => apiFetch("/api/teams", {method:"POST", body:JSON.stringify({name})}),
   getTeam:    (id)          => apiFetch(`/api/teams/${id}`),
+  updateTeam: (id, data)    => apiFetch(`/api/teams/${id}`, {method:"PATCH", body:JSON.stringify(data)}),
+  deleteTeam: (id)          => apiFetch(`/api/teams/${id}`, {method:"DELETE"}),
   invite:     (id, email)   => apiFetch(`/api/teams/${id}/invite`, {method:"POST", body:JSON.stringify({email})}),
   share:      (taskId, opt) => apiFetch(`/api/tasks/${taskId}/share`, {method:"POST", body:JSON.stringify(opt||{})}),
   unshare:    (taskId)      => apiFetch(`/api/tasks/${taskId}/share`, {method:"DELETE"}),

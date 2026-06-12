@@ -26,6 +26,7 @@ final class UserController
         $data = Validator::make($req->body, [
             'name'      => 'nullable|string|max:120',
             'avatarUrl' => 'nullable|string|max:512',
+            'password'  => 'nullable|string|min:8|max:128',
         ]);
 
         $update = [];
@@ -34,6 +35,11 @@ final class UserController
         }
         if (array_key_exists('avatarUrl', $data)) {
             $update['avatar_url'] = $data['avatarUrl'];
+        }
+
+        // Passwortwechsel (hebt den Erstpasswort-Zwang auf).
+        if (!empty($data['password'])) {
+            User::updatePassword($req->userId(), $data['password']);
         }
 
         $user = User::update($req->userId(), $update);

@@ -7,6 +7,7 @@ namespace App\Routes;
 use App\Controllers\AuditController;
 use App\Controllers\AuthController;
 use App\Controllers\CommentController;
+use App\Controllers\NoteController;
 use App\Controllers\ShareController;
 use App\Controllers\TaskController;
 use App\Controllers\TeamController;
@@ -55,10 +56,19 @@ return (static function (): Router {
     $r->post('/api/tasks/:id/comments',             [CommentController::class, 'store'],   ['auth' => true]);
     $r->delete('/api/tasks/:id/comments/:commentId',[CommentController::class, 'destroy'], ['auth' => true]);
 
+    // --- Notizen & Planungen ----------------------------------------------------
+    $r->get('/api/notes',        [NoteController::class, 'index'],   ['auth' => true]);
+    $r->post('/api/notes',       [NoteController::class, 'store'],   ['auth' => true]);
+    $r->get('/api/notes/:id',    [NoteController::class, 'show'],    ['auth' => true]);
+    $r->patch('/api/notes/:id',  [NoteController::class, 'update'],  ['auth' => true]);
+    $r->delete('/api/notes/:id', [NoteController::class, 'destroy'], ['auth' => true]);
+
     // --- Teams ----------------------------------------------------------------
-    $r->post('/api/teams',          [TeamController::class, 'store'],  ['auth' => true]);
-    $r->get('/api/teams/:id',       [TeamController::class, 'show'],   ['auth' => true]);
-    $r->post('/api/teams/:id/invite',[TeamController::class, 'invite'],['auth' => true]);
+    $r->post('/api/teams',          [TeamController::class, 'store'],   ['auth' => true]);
+    $r->get('/api/teams/:id',       [TeamController::class, 'show'],    ['auth' => true]);
+    $r->patch('/api/teams/:id',     [TeamController::class, 'update'],  ['auth' => true]);
+    $r->delete('/api/teams/:id',    [TeamController::class, 'destroy'], ['auth' => true]);
+    $r->post('/api/teams/:id/invite',[TeamController::class, 'invite'], ['auth' => true]);
 
     // --- Audit ----------------------------------------------------------------
     $r->get('/api/tasks/:id/audit', [AuditController::class, 'index'], ['auth' => true]);

@@ -66,6 +66,21 @@ final class Team extends Model
         return (bool) $stmt->fetchColumn();
     }
 
+    public static function update(int $id, array $data): array
+    {
+        if (array_key_exists('name', $data)) {
+            self::db()->prepare('UPDATE teams SET name = :n WHERE id = :id')
+                ->execute([':n' => $data['name'], ':id' => $id]);
+        }
+        return self::find($id);
+    }
+
+    /** Löscht das Team; Aufgaben/Notizen behalten team_id=NULL (FK SET NULL). */
+    public static function delete(int $id): void
+    {
+        self::db()->prepare('DELETE FROM teams WHERE id = :id')->execute([':id' => $id]);
+    }
+
     public static function addMember(int $teamId, int $userId, string $role = 'member'): void
     {
         self::db()->prepare(

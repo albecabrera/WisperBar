@@ -12,7 +12,7 @@ namespace App\Models;
 final class User extends Model
 {
     /** Öffentliche Felder (ohne password_hash). */
-    private const PUBLIC_COLS = 'id, email, name, avatar_url, created_at, updated_at';
+    private const PUBLIC_COLS = 'id, email, abbreviation, must_change_password, name, avatar_url, created_at, updated_at';
 
     public static function create(string $email, string $password, ?string $name = null): array
     {
@@ -45,9 +45,25 @@ final class User extends Model
         return (bool) $stmt->fetchColumn();
     }
 
+    /** Lehrer-Login: Nutzer über das Kürzel finden (z. B. 'ca' für Cabrera). */
+    public static function findByAbbreviation(string $abbr): ?array
+    {
+        $stmt = self::db()->prepare('SELECT * FROM users WHERE abbreviation = :a');
+        $stmt->execute([':a' => strtolower(trim($abbr))]);
+        return $stmt->fetch() ?: null;
+    }
+
     public static function verifyPassword(array $user, string $password): bool
     {
         return password_verify($password, $user['password_hash'] ?? '');
+    }
+
+    /** Neues Passwort setzen; hebt den Erstpasswort-Zwang auf. */
+    public static function updatePassword(int $id, string $password): void
+    {
+        self::db()->prepare(
+            'UPDATE users SET password_hash = :p, must_change_password = 0 WHERE id = :id'
+        )->execute([':p' => password_hash($password, PASSWORD_BCRYPT), ':id' => $id]);
     }
 
     public static function update(int $id, array $fields): array

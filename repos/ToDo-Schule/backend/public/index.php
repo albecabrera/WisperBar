@@ -12,7 +12,7 @@ declare(strict_types=1);
  *   4. Request einlesen, Router dispatchen
  *
  * Lokal starten:
- *   php -S 0.0.0.0:8080 -t public
+ *   php -S 0.0.0.0:8085 -t public
  */
 
 require dirname(__DIR__) . '/src/bootstrap.php';

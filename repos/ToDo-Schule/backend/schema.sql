@@ -16,15 +16,18 @@ USE todo_schule;
 --  Benutzer
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
-  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  email         VARCHAR(255)    NOT NULL,
-  password_hash VARCHAR(255)    NOT NULL,
-  name          VARCHAR(120)    NULL,
-  avatar_url    VARCHAR(512)    NULL,
-  created_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  id                   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  email                VARCHAR(255)    NOT NULL,
+  abbreviation         VARCHAR(8)      NULL,      -- Lehrerkürzel, z. B. 'ca' für Cabrera
+  password_hash        VARCHAR(255)    NOT NULL,
+  must_change_password TINYINT(1)      NOT NULL DEFAULT 0,  -- 1 nach Seed: Erstpasswort = Nachname
+  name                 VARCHAR(120)    NULL,
+  avatar_url           VARCHAR(512)    NULL,
+  created_at           DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at           DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_users_email (email)
+  UNIQUE KEY uq_users_email (email),
+  UNIQUE KEY uq_users_abbr (abbreviation)
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------------------------
@@ -160,6 +163,26 @@ CREATE TABLE IF NOT EXISTS share_links (
   KEY idx_share_task (task_id),
   CONSTRAINT fk_share_task FOREIGN KEY (task_id)    REFERENCES tasks (id) ON DELETE CASCADE,
   CONSTRAINT fk_share_by   FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- -----------------------------------------------------------------------------
+--  Notizen & Planungen — ohne team_id privat, mit team_id im Team geteilt.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS notes (
+  id         BIGINT UNSIGNED        NOT NULL AUTO_INCREMENT,
+  title      VARCHAR(255)           NOT NULL,
+  content    MEDIUMTEXT             NULL,
+  kind       ENUM('note','plan')    NOT NULL DEFAULT 'note',
+  team_id    BIGINT UNSIGNED        NULL,
+  created_by BIGINT UNSIGNED        NOT NULL,
+  created_at DATETIME               NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME               NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_notes_team (team_id),
+  KEY idx_notes_creator (created_by),
+  KEY idx_notes_updated (updated_at),
+  CONSTRAINT fk_notes_creator FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT fk_notes_team    FOREIGN KEY (team_id)    REFERENCES teams (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------------------------

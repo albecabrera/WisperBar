@@ -38,6 +38,41 @@ final class TeamController
         Response::json(['team' => $team]);
     }
 
+    /** Umbenennen — nur der Eigentümer. */
+    public static function update(Request $req): void
+    {
+        $team = self::loadOwned($req);
+        $data = Validator::make($req->body, ['name' => 'required|string|min:2|max:160']);
+        $updated = Team::update((int) $team['id'], $data);
+
+        Emitter::emit(Emitter::team((int) $team['id']), 'team:updated', ['team' => $updated]);
+        Response::json(['team' => $updated]);
+    }
+
+    /** Löschen — nur der Eigentümer. Aufgaben/Notizen bleiben (team_id=NULL). */
+    public static function destroy(Request $req): void
+    {
+        $team = self::loadOwned($req);
+        $teamId = (int) $team['id'];
+
+        Emitter::emit(Emitter::team($teamId), 'team:deleted', ['teamId' => $teamId]);
+        Team::delete($teamId);
+
+        Response::noContent();
+    }
+
+    private static function loadOwned(Request $req): array
+    {
+        $team = Team::find((int) $req->param('id'));
+        if ($team === null) {
+            throw HttpException::notFound('Team nicht gefunden', 'team_not_found');
+        }
+        if ((int) $team['owner_id'] !== $req->userId()) {
+            throw HttpException::forbidden('Nur der Eigentümer darf das', 'not_owner');
+        }
+        return $team;
+    }
+
     public static function invite(Request $req): void
     {
         $teamId = (int) $req->param('id');

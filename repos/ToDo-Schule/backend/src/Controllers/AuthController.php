@@ -38,17 +38,30 @@ final class AuthController
         Response::json(['user' => $user, ...$tokens], 201);
     }
 
+    /**
+     * Login per Lehrerkürzel ('ca' für Cabrera) ODER E-Mail.
+     * Erstpasswort nach dem Seed ist der eigene Nachname; danach signalisiert
+     * must_change_password=1 dem Frontend, den Passwortwechsel einzufordern.
+     */
     public static function login(Request $req): void
     {
         $data = Validator::make($req->body, [
-            'email'    => 'required|email',
-            'password' => 'required|string',
+            'email'        => 'nullable|email',
+            'abbreviation' => 'nullable|string|max:8',
+            'password'     => 'required|string',
         ]);
 
-        $user = User::findByEmail($data['email']);
+        if (empty($data['email']) && empty($data['abbreviation'])) {
+            throw HttpException::unprocessable('Kürzel oder E-Mail erforderlich', [], 'missing_identifier');
+        }
+
+        $user = !empty($data['abbreviation'])
+            ? User::findByAbbreviation($data['abbreviation'])
+            : User::findByEmail($data['email']);
+
         if ($user === null || !User::verifyPassword($user, $data['password'])) {
-            // Bewusst generische Meldung (keine Auskunft, ob E-Mail existiert).
-            throw HttpException::unauthorized('E-Mail oder Passwort ist falsch', 'invalid_credentials');
+            // Bewusst generische Meldung (keine Auskunft, ob das Konto existiert).
+            throw HttpException::unauthorized('Kürzel/E-Mail oder Passwort ist falsch', 'invalid_credentials');
         }
 
         unset($user['password_hash']);

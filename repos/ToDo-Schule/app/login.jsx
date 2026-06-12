@@ -14,14 +14,15 @@ function LoginScreen({onLogin}){
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Echter Login/Registrierung gegen das PHP-Backend
+  // Echter Login/Registrierung gegen das PHP-Backend.
+  // Lehrer melden sich mit ihrem Kürzel an ('ca' für Cabrera); E-Mail geht auch.
   async function submit(e){
     e.preventDefault();
     setLoading(true);
     setError(null);
     try{
       if(step==="register") await window.ESG_API.register(name, email, pass);
-      else                  await window.ESG_API.login(email, pass);
+      else                  await window.ESG_API.login(email.trim(), pass);
       onLogin();
     }catch(err){
       setError(err.error || err.message || "Anmeldung fehlgeschlagen.");
@@ -89,8 +90,11 @@ function LoginScreen({onLogin}){
 
         step === "login" && h("form",{className:"login-form",onSubmit:submit},
           h("div",{className:"field"},
-            h("label",null,"E-Mail"),
-            h("input",{className:"input input-lg",type:"email",placeholder:"name@esg-bonn.de",value:email,onChange:e=>setEmail(e.target.value),autoFocus:true})
+            h("label",null,"Kürzel oder E-Mail"),
+            h("input",{className:"input input-lg",type:"text",autoCapitalize:"none",autoComplete:"username",
+              placeholder:"z. B. ca oder vorname.nachname@esg.nrw.schule",
+              value:email,onChange:e=>setEmail(e.target.value),autoFocus:true}),
+            h("div",{className:"field-hint",style:{marginTop:4}},"Erstpasswort: dein Nachname")
           ),
           h("div",{className:"field"},
             h("div",{className:"passrow"},

@@ -12,7 +12,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 }/*EDITMODE-END*/;
 
 /* ── Echtzeit & Push ─────────────────────────────────────────────────── */
-const WS_URL = window.ESG_WS_URL || "ws://localhost:8090";
+const WS_URL = window.ESG_WS_URL || "ws://127.0.0.1:8090";
 
 /* Service Worker registrieren (Basis für Push-Notifications). */
 function registerServiceWorker(){
@@ -97,18 +97,76 @@ function TeamBanner({activeTeam, tasks}){
   );
 }
 
+/* ── Passwortwechsel nach dem ersten Login (Erstpasswort = Nachname) ──── */
+function ChangePasswordModal({onDone, onSkip}){
+  const [p1,setP1] = useState("");
+  const [p2,setP2] = useState("");
+  const [err,setErr] = useState(null);
+  const [busy,setBusy] = useState(false);
+
+  async function submit(e){
+    e.preventDefault();
+    if(p1.length<8) return setErr("Mindestens 8 Zeichen.");
+    if(p1!==p2)     return setErr("Die Passwörter stimmen nicht überein.");
+    setBusy(true);
+    try{
+      await window.ESG_API.updateMe({password:p1});
+      onDone();
+    }catch(ex){
+      setErr(ex.error||"Passwort konnte nicht geändert werden.");
+    }finally{ setBusy(false); }
+  }
+
+  return h("div",{className:"modal"},
+    h("div",{className:"modal-card"},
+      h("div",{className:"modal-head"},h("h3",null,"🔐 Passwort ändern")),
+      h("div",{className:"modal-sub"},"Du nutzt noch dein Erstpasswort (dein Nachname). Bitte wähle jetzt ein eigenes."),
+      h("form",{onSubmit:submit},
+        h("div",{className:"modal-body"},
+          err && h("div",{style:{color:"var(--st-high,#c0392b)",fontSize:13,fontWeight:600}},err),
+          h("div",{className:"field"},
+            h("label",null,"Neues Passwort"),
+            h("input",{className:"input input-lg",type:"password",value:p1,autoFocus:true,
+              placeholder:"Mindestens 8 Zeichen",onChange:e=>setP1(e.target.value)})
+          ),
+          h("div",{className:"field"},
+            h("label",null,"Wiederholen"),
+            h("input",{className:"input input-lg",type:"password",value:p2,
+              onChange:e=>setP2(e.target.value)})
+          )
+        ),
+        h("div",{className:"modal-foot"},
+          h("button",{type:"button",className:"btn btn-ghost",onClick:onSkip},"Später"),
+          h("div",{className:"sp"}),
+          h("button",{type:"submit",className:"btn btn-primary",disabled:busy},
+            busy?"Speichern…":"Passwort speichern")
+        )
+      )
+    )
+  );
+}
+
 /* ── Main App ────────────────────────────────────────────────────────── */
 function App(){
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  // Theme wiederherstellen: gespeicherte Wahl > System-Präferenz
+  useEffect(()=>{
+    const saved = localStorage.getItem("esg-theme");
+    if(saved==="dark"||saved==="light") setTweak("theme",saved);
+    else if(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches) setTweak("theme","dark");
+  },[]);
   useEffect(()=>{
     const root = document.documentElement;
     root.setAttribute("data-theme", t.theme==="dark"?"dark":"");
     root.setAttribute("data-accent", t.accent==="indigo"?"":t.accent);
     root.setAttribute("data-density", t.density==="default"?"":t.density);
+    localStorage.setItem("esg-theme", t.theme);
   },[t.theme,t.accent,t.density]);
   // persist default view choice
   const [screen,setScreen] = useState("login");
+  const [section,setSection]       = useState("tasks"); // tasks | notes
   const [tasks, setTasks]          = useState(INIT_TASKS);
+  const [notes, setNotes]          = useState(window.ESG_DATA.NOTES);
   const [notifs, setNotifs]        = useState(INIT_NOTIFS);
   const [activeTeam, setActiveTeam]= useState("all");
   const [view, setView]            = useState("list");
@@ -116,6 +174,9 @@ function App(){
   const [openTask, setOpenTask]    = useState(null);
   const [shareTask, setShareTask]  = useState(null);
   const [showNewTask, setShowNewTask] = useState(false);
+  const [showQuickNote, setShowQuickNote] = useState(false);
+  const [mustChangePass, setMustChangePass] = useState(false);
+  const [welcome, setWelcome] = useState(null); // {greet,name,out} — Vollbild-Begrüßung
   const [showNotifs, setShowNotifs]= useState(false);
   const [searchVal, setSearchVal]  = useState("");
   const [filters, setFilters]      = useState({priority:null,status:null,overdue:null});
@@ -160,8 +221,124 @@ function App(){
     addToast({title:"Aufgabe erstellt",body:`<b>${t.title}</b> wurde hinzugefügt.`,icon:"checkCircle",color:"var(--st-done-bg)",iconColor:"var(--st-done)"});
   }
 
+  // Notiz speichern (create oder update), geteilt via teamId
+  async function saveNote(n, {silent}={}){
+    if(window.ESG_API.hasSession()){
+      try{
+        const saved = n.id
+          ? await window.ESG_API.updateNote(n.id, n)
+          : await window.ESG_API.createNote(n);
+        setNotes(prev => n.id ? prev.map(x=>x.id===saved.id?saved:x) : [saved,...prev]);
+        if(!silent) addToast({title:n.id?"Notiz gespeichert":"Notiz erstellt",body:`<b>${saved.title}</b>`,icon:"checkCircle",color:"var(--st-done-bg)",iconColor:"var(--st-done)"});
+      }catch(err){
+        addToast({title:"Fehler",body:err.error||"Notiz konnte nicht gespeichert werden."});
+        throw err;
+      }
+      return;
+    }
+    // Demo-Modus: lokal
+    if(n.id) setNotes(prev=>prev.map(x=>x.id===n.id?{...x,...n,updatedAt:new Date().toISOString()}:x));
+    else setNotes(prev=>[{...n,id:Date.now(),createdBy:ME.id,authorName:ME.name,updatedAt:new Date().toISOString()},...prev]);
+  }
+
+  function deleteNote(n){
+    setNotes(prev=>prev.filter(x=>x.id!==n.id));
+    if(window.ESG_API.hasSession()){
+      window.ESG_API.deleteNote(n.id).catch(()=>{
+        setNotes(prev=>[n,...prev]);
+        addToast({title:"Fehler",body:"Notiz konnte nicht gelöscht werden."});
+      });
+    }
+  }
+
+  // Bereiche (Teams): umbenennen / löschen / anlegen.
+  // TEAMS ist ein modulweites Array — in place mutieren + Re-Render erzwingen,
+  // damit alle Komponenten (Sidebar, Banner, Modals) die Änderung sehen.
+  const [,setTeamsRev] = useState(0);
+  function renameTeam(id, name){
+    const team = window.ESG_DATA.TEAMS.find(x=>x.id===id);
+    if(!team || !name.trim()) return;
+    team.name = name.trim();
+    setTeamsRev(r=>r+1);
+    if(window.ESG_API.hasSession()){
+      window.ESG_API.updateTeam(id,{name:team.name}).catch(()=>{});
+    }
+  }
+  function deleteTeam(id){
+    const arr = window.ESG_DATA.TEAMS;
+    const i = arr.findIndex(x=>x.id===id);
+    if(i<0) return;
+    const [removed] = arr.splice(i,1);
+    setTeamsRev(r=>r+1);
+    if(activeTeam===id) setActiveTeam("all");
+    // Aufgaben/Notizen behalten ihre team_id=NULL serverseitig; lokal lösen:
+    setTasks(prev=>prev.map(t=>t.teamId===id?{...t,teamId:null}:t));
+    setNotes(prev=>prev.map(n=>n.teamId===id?{...n,teamId:null}:n));
+    addToast({title:"Bereich gelöscht",body:`<b>${removed.name}</b> wurde entfernt.`});
+    if(window.ESG_API.hasSession()){
+      window.ESG_API.deleteTeam(id).catch(()=>{});
+    }
+  }
+  function createTeam(name){
+    if(!name.trim()) return;
+    const arr = window.ESG_DATA.TEAMS;
+    const id = Math.max(0,...arr.map(t=>t.id))+1;
+    arr.push({id, name:name.trim(), icon:"📁", color:"#6178FE", members:[ME.id]});
+    setTeamsRev(r=>r+1);
+    if(window.ESG_API.hasSession()){
+      window.ESG_API.createTeam(name.trim()).catch(()=>{});
+    }
+  }
+
   // Service Worker einmalig registrieren
   useEffect(()=>{ registerServiceWorker(); },[]);
+
+  // Begrüßung nach Login — Vollbild-Splash, verschwindet nach 3 s von selbst
+  useEffect(()=>{
+    if(screen!=="app") return;
+    let cancelled = false;
+    const timers = [];
+    (async()=>{
+      let name = ME.name.split(" ")[0];
+      let user = null;
+      if(window.ESG_API.hasSession()){
+        try{
+          const r = await window.ESG_API.me();
+          user = r.user || r;
+          if(user && user.name) name = user.name.split(" ")[0];
+        }catch(_){}
+      }
+      if(cancelled) return;
+
+      // Eingeloggten Nutzer in ME übernehmen — Avatare zeigen die echten Initialen
+      if(user && user.name){
+        ME.name = user.name;
+        ME.email = user.email || ME.email;
+        ME.initials = user.name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
+        if(user.abbreviation) ME.role = "Kürzel: " + user.abbreviation.toUpperCase();
+      }
+
+      const hr = new Date().getHours();
+      const greet = hr<12 ? "Guten Morgen" : hr<18 ? "Guten Tag" : "Guten Abend";
+
+      setWelcome({greet, name});
+      timers.push(setTimeout(()=>setWelcome(w=>w?{...w,out:true}:null), 3000)); // Fade-out starten
+      timers.push(setTimeout(()=>setWelcome(null), 3600));                       // entfernen
+
+      // Nach dem Splash: Folge-Hinweise
+      timers.push(setTimeout(()=>{
+        if(user && Number(user.must_change_password)===1){
+          addToast({title:"Passwort ändern 🔐",body:"Du nutzt noch dein Erstpasswort — bitte ändere es jetzt."});
+          setMustChangePass(true);
+        }
+        if(hr>=23 || hr<5){
+          addToast({title:"Schlafenszeit 🌙",body:"Du brauchst Erholung!"});
+          pushNotify("Schlafenszeit 🌙","Du brauchst Erholung!");
+        }
+      }, 3600));
+    })();
+    return ()=>{ cancelled = true; timers.forEach(clearTimeout); };
+  },[screen]);
 
   // Nach Login: Notification-Erlaubnis anfragen
   useEffect(()=>{
@@ -171,11 +348,11 @@ function App(){
     }
   },[screen]);
 
-  // Echte Aufgaben vom PHP-Backend laden (Demo-Modus behält Mock-Daten)
+  // Echte Aufgaben + Notizen vom PHP-Backend laden (Demo-Modus behält Mock-Daten)
   useEffect(()=>{
     if(screen!=="app" || !window.ESG_API.hasSession()) return;
-    window.ESG_API.getTasks()
-      .then(setTasks)
+    Promise.all([window.ESG_API.getTasks(), window.ESG_API.getNotes()])
+      .then(([t,n])=>{ setTasks(t); setNotes(n); })
       .catch(err=>{
         console.warn("Backend nicht erreichbar, Mock-Daten bleiben aktiv:", err);
         addToast({title:"Offline",body:"Backend nicht erreichbar — Demo-Daten werden angezeigt."});
@@ -227,6 +404,23 @@ function App(){
         case "team:member_added":
           addToast({title:"Team",body:"Du wurdest zu einem Team hinzugefügt."});
           break;
+        case "note:created":{
+          const note = window.ESG_API.mapNote(payload.note);
+          setNotes(prev => prev.some(n=>n.id===note.id) ? prev : [note,...prev]);
+          if(note.createdBy!==ME.id){
+            addToast({title:"Neue Notiz",body:`<b>${note.title}</b> wurde geteilt.`});
+            pushNotify("Neue Notiz geteilt", note.title, {noteId:note.id});
+          }
+          break;
+        }
+        case "note:updated":{
+          const note = window.ESG_API.mapNote(payload.note);
+          setNotes(prev => prev.map(n=>n.id===note.id?note:n));
+          break;
+        }
+        case "note:deleted":
+          setNotes(prev => prev.filter(n=>n.id!==Number(payload.noteId)));
+          break;
       }
     }
 
@@ -260,23 +454,27 @@ function App(){
 
     h("div",{className:"app"},
       h(Sidebar,{
-        activeTeam, setActiveTeam:(t)=>{setActiveTeam(t);setFilters({priority:null,status:null,overdue:null});},
+        activeTeam, setActiveTeam:(t)=>{setSection("tasks");setActiveTeam(t);setFilters({priority:null,status:null,overdue:null});},
+        section, setSection,
         open:sidebarOpen, onClose:()=>setSidebarOpen(false),
-        onNewTask:()=>setShowNewTask(true)
+        onNewTask:()=>setShowNewTask(true),
+        onRenameTeam:renameTeam, onDeleteTeam:deleteTeam, onCreateTeam:createTeam
       }),
 
       h("div",{className:"main"},
         h(Topbar,{
-          activeTeam, view, setView,
+          activeTeam, section, view, setView,
           notifCount:unread,
           onBell:()=>setShowNotifs(p=>!p),
           onMenuOpen:()=>setSidebarOpen(true),
           searchVal, setSearchVal,
-          presenceUsers
+          presenceUsers,
+          theme:t.theme, onToggleTheme:()=>setTweak("theme", t.theme==="dark"?"light":"dark"),
+          onQuickNote:()=>setShowQuickNote(true)
         }),
 
         // Team banner
-        h(TeamBanner,{activeTeam,tasks}),
+        section==="tasks" && h(TeamBanner,{activeTeam,tasks}),
 
         // Notification panel (positioned relative to main)
         showNotifs && h("div",{style:{position:"relative",zIndex:40}},
@@ -285,15 +483,19 @@ function App(){
 
         h("div",{className:"content"},
           h("div",{className:"content-pad"},
-            h(Subbar,{filters,setFilters,view,setView}),
-            view==="list"
-              ? h(ListView,{tasks:visibleTasks,onOpen:setOpenTask,onToggleDone:toggleDone,searchVal,filters})
-              : h(BoardView,{tasks:visibleTasks,onOpen:setOpenTask,onNewTask:()=>setShowNewTask(true)})
+            section==="notes"
+              ? h(NotesView,{notes,onSave:saveNote,onDelete:deleteNote,searchVal})
+              : h(Fragment,null,
+                  h(Subbar,{filters,setFilters,view,setView}),
+                  view==="list"
+                    ? h(ListView,{tasks:visibleTasks,onOpen:setOpenTask,onToggleDone:toggleDone,searchVal,filters})
+                    : h(BoardView,{tasks:visibleTasks,onOpen:setOpenTask,onNewTask:()=>setShowNewTask(true)})
+                )
           )
         ),
 
         // Mobile FAB
-        h("button",{className:"fab","aria-label":"Neue Aufgabe",onClick:()=>setShowNewTask(true)},
+        section==="tasks" && h("button",{className:"fab","aria-label":"Neue Aufgabe",onClick:()=>setShowNewTask(true)},
           h(Icon,{n:"plus",size:26})
         )
       )
@@ -313,6 +515,26 @@ function App(){
 
     // New task modal
     showNewTask && h(NewTaskModal,{onClose:()=>setShowNewTask(false),onAdd:addTask,defaultTeam:activeTeam}),
+
+    // Erstpasswort-Zwang: nach erstem Login Passwortwechsel einfordern
+    mustChangePass && h(ChangePasswordModal,{
+      onDone:()=>{ setMustChangePass(false); addToast({title:"Passwort geändert ✓",body:"Dein neues Passwort ist aktiv.",icon:"checkCircle",color:"var(--st-done-bg)",iconColor:"var(--st-done)"}); },
+      onSkip:()=>setMustChangePass(false)
+    }),
+
+    // Roter Bugs-Button: minimalistische Checkliste (eine Notiz "Bugs")
+    showQuickNote && h(BugChecklistModal,{
+      note: notes.find(n=>n.title==="Bugs"),
+      onSave: saveNote,
+      onClose: ()=>setShowQuickNote(false)
+    }),
+
+    // Vollbild-Begrüßung (3 s, dann Auto-Fade)
+    welcome && h("div",{className:`welcome-splash${welcome.out?" out":""}`},
+      h("img",{src:"assets/esg-mark-ondark.svg",alt:"",className:"ws-logo"}),
+      h("h1",null,`${welcome.greet}, ${welcome.name}!`),
+      h("p",null,"Schön, dass du da bist.")
+    ),
 
     // Toasts
     h(ToastList,{toasts,dismiss:dismissToast}),

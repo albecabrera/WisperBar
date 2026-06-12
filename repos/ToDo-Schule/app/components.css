@@ -148,3 +148,23 @@
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
 .live-dot{width:7px;height:7px;border-radius:99px;background:var(--lime);box-shadow:0 0 0 0 rgba(84,185,72,.6);animation:livedot 1.8s infinite}
 @keyframes livedot{0%{box-shadow:0 0 0 0 rgba(84,185,72,.5)}70%{box-shadow:0 0 0 7px rgba(84,185,72,0)}100%{box-shadow:0 0 0 0 rgba(84,185,72,0)}}
+
+/* ── Sidebar: Bereich umbenennen + Kontextmenü ───────────────────────── */
+.sb-rename{
+  flex:1;min-width:0;border:none;outline:none;background:var(--surface);
+  border-radius:7px;padding:4px 8px;font:inherit;font-size:13.5px;font-weight:600;
+  color:var(--text);box-shadow:0 0 0 2px var(--accent);
+}
+.ctx-menu{
+  position:fixed;z-index:300;min-width:170px;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  box-shadow:var(--sh-pop);padding:5px;display:flex;flex-direction:column;gap:1px;
+}
+.ctx-menu button{
+  display:flex;align-items:center;gap:9px;width:100%;text-align:left;
+  border:none;background:none;cursor:pointer;border-radius:8px;
+  padding:8px 10px;font:inherit;font-size:13.5px;font-weight:600;color:var(--text);
+}
+.ctx-menu button:hover{background:var(--bg)}
+.ctx-menu button.danger{color:#e0314b}
+.ctx-menu button.danger:hover{background:#fd526614}
