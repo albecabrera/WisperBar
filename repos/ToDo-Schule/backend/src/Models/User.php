@@ -1,0 +1,83 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+/**
+ * User
+ * -----------------------------------------------------------------------------
+ * Benutzerverwaltung + Passwort-Hashing (bcrypt via password_hash).
+ */
+final class User extends Model
+{
+    /** Öffentliche Felder (ohne password_hash). */
+    private const PUBLIC_COLS = 'id, email, name, avatar_url, created_at, updated_at';
+
+    public static function create(string $email, string $password, ?string $name = null): array
+    {
+        $hash = password_hash($password, PASSWORD_BCRYPT);
+        $stmt = self::db()->prepare(
+            'INSERT INTO users (email, password_hash, name) VALUES (:e, :p, :n)'
+        );
+        $stmt->execute([':e' => strtolower($email), ':p' => $hash, ':n' => $name]);
+        return self::find((int) self::db()->lastInsertId());
+    }
+
+    public static function find(int $id): ?array
+    {
+        $stmt = self::db()->prepare('SELECT ' . self::PUBLIC_COLS . ' FROM users WHERE id = :id');
+        $stmt->execute([':id' => $id]);
+        return $stmt->fetch() ?: null;
+    }
+
+    public static function findByEmail(string $email): ?array
+    {
+        $stmt = self::db()->prepare('SELECT * FROM users WHERE email = :e');
+        $stmt->execute([':e' => strtolower($email)]);
+        return $stmt->fetch() ?: null;
+    }
+
+    public static function emailExists(string $email): bool
+    {
+        $stmt = self::db()->prepare('SELECT 1 FROM users WHERE email = :e');
+        $stmt->execute([':e' => strtolower($email)]);
+        return (bool) $stmt->fetchColumn();
+    }
+
+    public static function verifyPassword(array $user, string $password): bool
+    {
+        return password_verify($password, $user['password_hash'] ?? '');
+    }
+
+    public static function update(int $id, array $fields): array
+    {
+        $allowed = ['name', 'avatar_url'];
+        $set = [];
+        $params = [':id' => $id];
+        foreach ($allowed as $col) {
+            if (array_key_exists($col, $fields)) {
+                $set[] = "$col = :$col";
+                $params[":$col"] = $fields[$col];
+            }
+        }
+        if ($set !== []) {
+            $sql = 'UPDATE users SET ' . implode(', ', $set) . ' WHERE id = :id';
+            self::db()->prepare($sql)->execute($params);
+        }
+        return self::find($id);
+    }
+
+    /** Mehrere Nutzer anhand ihrer IDs laden (für Zuweisungen/Mitglieder). */
+    public static function findMany(array $ids): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        if ($ids === []) {
+            return [];
+        }
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = self::db()->prepare('SELECT ' . self::PUBLIC_COLS . " FROM users WHERE id IN ($in)");
+        $stmt->execute($ids);
+        return $stmt->fetchAll();
+    }
+}
