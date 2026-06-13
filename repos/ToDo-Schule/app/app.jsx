@@ -197,6 +197,8 @@ function App(){
   const [searchVal, setSearchVal]  = useState("");
   const [filters, setFilters]      = useState({priority:null,status:null,overdue:null});
   const [loadingTasks, setLoadingTasks] = useState(false);
+  const [sbWidth, setSbWidth] = useState(()=>{ const s=localStorage.getItem("sb-width"); return s?Math.max(180,Math.min(420,Number(s))):264; });
+  const [sbCollapsed, setSbCollapsed] = useState(()=>localStorage.getItem("sb-collapsed")==="1");
   const {list:toasts,add:addToast,dismiss:dismissToast} = useToasts();
 
   const unread = notifs.filter(n=>!n.read).length;
@@ -582,7 +584,10 @@ function App(){
         onNewTask:()=>setShowNewTask(true),
         onRenameTeam:renameTeam, onDeleteTeam:deleteTeam, onCreateTeam:(name,color,icon)=>createTeam(name,color,icon),
         onUpdateTeam:updateTeamProp, onReorderTeams:reorderTeams,
-        onNewTaskInTeam:(teamId)=>{ setActiveTeam(teamId); setSection("tasks"); setShowNewTask(true); }
+        onNewTaskInTeam:(teamId)=>{ setActiveTeam(teamId); setSection("tasks"); setShowNewTask(true); },
+        width:sbWidth, collapsed:sbCollapsed,
+        onWidthChange:w=>{ setSbWidth(w); localStorage.setItem("sb-width",w); },
+        onToggleCollapse:()=>setSbCollapsed(v=>{ const nv=!v; localStorage.setItem("sb-collapsed",nv?"1":"0"); return nv; }),
       }),
 
       h("div",{className:"main"},
@@ -590,7 +595,7 @@ function App(){
           activeTeam, section, view, setView,
           notifCount:unread,
           onBell:()=>setShowNotifs(p=>!p),
-          onMenuOpen:()=>setSidebarOpen(true),
+          onMenuOpen:()=>{ if(window.innerWidth<768) setSidebarOpen(true); else setSbCollapsed(v=>{ const nv=!v; localStorage.setItem("sb-collapsed",nv?"1":"0"); return nv; }); },
           searchVal, setSearchVal,
           presenceUsers,
           theme:t.theme, onToggleTheme:()=>setTweak("theme", t.theme==="dark"?"light":"dark"),

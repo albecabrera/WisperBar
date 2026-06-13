@@ -47,13 +47,28 @@
 .passrow a{font-size:12.5px;font-weight:600}
 
 /* ================================ SHELL ================================== */
-.app{display:grid;grid-template-columns:264px 1fr;height:100%;background:var(--bg)}
-.app.nosidebar{grid-template-columns:1fr}
+.app{display:flex;height:100%;background:var(--bg)}
 
 .sidebar{
+  flex:none;
+  /* width is set via inline style; default 264px */
+  transition:width 220ms cubic-bezier(.4,0,.2,1);
+  overflow:hidden;
+  position:relative;
   display:flex;flex-direction:column;gap:6px;height:100%;min-height:0;
-  background:var(--surface);border-right:1px solid var(--border);padding:14px 14px 12px;
+  background:var(--surface);border-right:1px solid var(--border);
 }
+
+.sb-inner{padding:14px 14px 12px;display:flex;flex-direction:column;gap:6px;flex:1;min-height:0;min-width:0}
+/* resizer handle */
+.sb-resizer{
+  position:absolute;top:0;right:0;width:5px;height:100%;
+  cursor:col-resize;z-index:10;
+  transition:background .15s;
+}
+.sb-resizer:hover,.sb-resizer.active{background:var(--accent);opacity:.45}
+/* collapse toggle button that lives in the topbar, always visible */
+.topbar .menu-btn{display:flex!important}
 .sb-brand{display:flex;align-items:center;gap:11px;padding:6px 6px 12px}
 .sb-brand .brand-tile{width:40px;height:40px;border-radius:12px;box-shadow:var(--sh-1);border:1px solid var(--border)}
 .sb-brand .brand-tile img{width:29px}

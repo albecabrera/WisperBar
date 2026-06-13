@@ -20,9 +20,12 @@
   .login{grid-template-columns:1fr}
   .login-brand{display:none}
 
-  .app{grid-template-columns:1fr}
-  .sidebar{position:fixed;top:0;left:0;height:100%;z-index:60;transform:translateX(-100%);transition:transform .3s cubic-bezier(.22,1,.36,1)}
+  .sidebar{position:fixed;top:0;left:0;height:100%;z-index:60;
+    width:280px!important; /* override inline resize/collapse on mobile */
+    transform:translateX(-100%);
+    transition:transform .3s cubic-bezier(.22,1,.36,1)!important}
   .sidebar.open{transform:none;box-shadow:var(--sh-pop)}
+  .sb-resizer{display:none} /* no resize handle on mobile */
   .topbar .menu-btn{display:flex}
   .topbar .sp{flex:1}
   .topbar .search{display:none}

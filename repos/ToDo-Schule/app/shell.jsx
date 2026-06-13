@@ -124,7 +124,8 @@ function TeamPopup({team, onClose, onRename, onDelete, onUpdate, onNewTask, onIn
 function Sidebar({
   activeTeam, setActiveTeam, section, setSection, open, onClose,
   onNewTask, onRenameTeam, onDeleteTeam, onCreateTeam,
-  onUpdateTeam, onReorderTeams, onNewTaskInTeam
+  onUpdateTeam, onReorderTeams, onNewTaskInTeam,
+  width, collapsed, onWidthChange, onToggleCollapse
 }){
   const [renaming, setRenaming] = useState(null);
   const [tmpName, setTmpName]   = useState("");
@@ -188,6 +189,35 @@ function Sidebar({
     if(srcId && srcId!==targetId) onReorderTeams(srcId, targetId);
   }
 
+  // Resize drag logic
+  const widthRef = useRef(width || 264);
+  useEffect(()=>{ widthRef.current = width || 264; }, [width]);
+  const [resizerActive, setResizerActive] = useState(false);
+
+  function onResizerMouseDown(e){
+    if(!onWidthChange) return;
+    const startX = e.clientX;
+    const startW = widthRef.current;
+    e.preventDefault();
+    setResizerActive(true);
+
+    function onMove(ev){
+      const w = Math.max(180, Math.min(420, startW + (ev.clientX - startX)));
+      onWidthChange(w);
+    }
+    function onUp(){
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.documentElement.style.cursor = "";
+      document.documentElement.style.userSelect = "";
+      setResizerActive(false);
+    }
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.documentElement.style.cursor = "col-resize";
+    document.documentElement.style.userSelect = "none";
+  }
+
   const navItems = [
     {id:"all",   icon:"inbox",    label:"Alle Aufgaben",   count: TASKS.filter(t=>t.status!=="done").length},
     {id:"mine",  icon:"user",     label:"Mir zugewiesen",  count: TASKS.filter(t=>t.assignees.includes(ME.id)&&t.status!=="done").length},
@@ -195,7 +225,17 @@ function Sidebar({
     {id:"done",  icon:"checkCircle",label:"Erledigt",      count: TASKS.filter(t=>t.status==="done").length},
   ];
 
-  return h("aside",{className:`sidebar ${open?"open":""}`, id:"sidebar"},
+  const sbW = collapsed ? 0 : (width || 264);
+
+  return h("aside",{className:`sidebar ${open?"open":""}`, id:"sidebar", style:{width:sbW}},
+    // Resizer handle (only when not collapsed)
+    !collapsed && h("div",{
+      className:`sb-resizer${resizerActive?" active":""}`,
+      onMouseDown:onResizerMouseDown,
+      title:"Breite anpassen",
+    }),
+
+    h("div",{className:"sb-inner"},
     h("div",{className:"sb-brand"},
       h("div",{className:"brand-tile",style:{border:"1px solid var(--border)"}},
         h("img",{src:"assets/esg-mark.svg",alt:"ESG Logo"})
@@ -204,9 +244,13 @@ function Sidebar({
         h("div",{className:"brand-name"},"ToDo-Schule"),
         h("div",{className:"brand-sub"},"ESG Bonn")
       ),
-      open && h("button",{className:"iconbtn",onClick:onClose,style:{marginLeft:"auto"}},
-        h(Icon,{n:"x",size:17})
-      )
+      open
+        ? h("button",{className:"iconbtn",onClick:onClose,style:{marginLeft:"auto"}},
+            h(Icon,{n:"x",size:17})
+          )
+        : h("button",{className:"iconbtn",onClick:onToggleCollapse,style:{marginLeft:"auto"},title:"Sidebar ausblenden"},
+            h(Icon,{n:"chevronLeft",size:16})
+          )
     ),
 
     h("div",{className:"sb-new"},
@@ -355,6 +399,7 @@ function Sidebar({
         h("span",{className:"cog"},h(Icon,{n:"settings",size:15}))
       )
     )
+    ) // sb-inner
   );
 }
 
