@@ -136,10 +136,12 @@ Vollständige Referenz: `backend/API-Referenz.html` · Backend-Details: `backend
 |--------:|------|-------|
 | POST | `/api/auth/login` | Login per `{abbreviation, password}` oder `{email, password}` |
 | PATCH | `/api/users/me` | Profil/Passwort ändern (`{password}` hebt Erstpasswort-Zwang auf) |
-| GET/POST | `/api/tasks` | Aufgaben listen/erstellen |
+| GET/POST | `/api/tasks` | Aufgaben listen/erstellen (inkl. `tags`, `subtasks`, `remindAt`) |
 | PATCH/DELETE | `/api/tasks/:id` | Aufgabe ändern/löschen |
 | GET/POST | `/api/notes` | Notizen & Planungen listen/erstellen (`?kind=note\|plan`) |
 | PATCH/DELETE | `/api/notes/:id` | Notiz ändern (auch Checklisten-Toggle)/löschen |
+| GET | `/api/notifications` | Benachrichtigungen abrufen |
+| PATCH | `/api/notifications/:id` | Als gelesen markieren |
 | WS | `ws://localhost:8090/?token=…` | Echtzeit: `task:*`, `note:*`, `comment:added`, `user:assigned` |
 
 ---
@@ -152,3 +154,29 @@ open http://localhost:5500/dev.html   # oder: ohne Build-Schritt entwickeln
 ```
 
 **Test-Konten** (lokal, nach Seed): `ca` / `Cabrera` · `ve` / `Venedey`
+
+---
+
+## Datenbankmigrationen
+
+Nach dem initialen `schema.sql` folgende Spalten manuell ergänzen (einmalig):
+
+```sql
+ALTER TABLE tasks
+  ADD COLUMN remind_at DATETIME  NULL AFTER due_date,
+  ADD COLUMN subtasks  LONGTEXT  NULL AFTER description,
+  ADD COLUMN tags      TEXT      NULL AFTER subtasks;
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_id    BIGINT UNSIGNED NOT NULL,
+  type       VARCHAR(32)     NOT NULL,
+  actor_id   BIGINT UNSIGNED NULL,
+  task_id    BIGINT UNSIGNED NULL,
+  text       TEXT            NOT NULL,
+  is_read    TINYINT(1)      NOT NULL DEFAULT 0,
+  created_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_user (user_id),
+  INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```

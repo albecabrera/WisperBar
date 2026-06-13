@@ -53,6 +53,8 @@ final class TaskController
             'remindAt'    => 'nullable|date',
             'teamId'      => 'nullable|int',
             'assignees'   => 'nullable|array',
+            'tags'        => 'nullable|array',
+            'subtasks'    => 'nullable|array',
         ]);
 
         if (!empty($data['teamId']) && !Team::isMember((int) $data['teamId'], $req->userId())) {
@@ -88,6 +90,8 @@ final class TaskController
             'remindAt'    => 'nullable|date',
             'teamId'      => 'nullable|int',
             'assignees'   => 'nullable|array',
+            'tags'        => 'nullable|array',
+            'subtasks'    => 'nullable|array',
         ]);
 
         if (array_key_exists('dueDate', $data)) {

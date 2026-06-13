@@ -246,6 +246,8 @@ function mapTask(t){
     createdAt: t.created_at,
     comments:  t.comments != null ? Number(t.comments) : 0,
     watched:   false,
+    tags:      Array.isArray(t.tags) ? t.tags : [],
+    subtasks:  Array.isArray(t.subtasks) ? t.subtasks : [],
   };
 }
 
@@ -383,12 +385,14 @@ const ESG_API = {
     const {tasks} = await apiFetch("/api/tasks" + (q ? `?${q}` : ""));
     return tasks.map(mapTask);
   },
-  async createTask({title, desc, status, priority, due, remindAt, teamId, assignees}){
+  async createTask({title, desc, status, priority, due, remindAt, teamId, assignees, tags, subtasks}){
     const {task} = await apiFetch("/api/tasks", {method:"POST", body:JSON.stringify({
       title, description:desc, status, priority,
       dueDate:due, remindAt: remindAt||null,
       teamId: typeof teamId==="number" ? teamId : null,
       assignees,
+      tags:     tags     || null,
+      subtasks: subtasks || null,
     })});
     return mapTask(task);
   },
@@ -402,6 +406,8 @@ const ESG_API = {
     if("remindAt" in patch) body.remindAt    = patch.remindAt;
     if("teamId"   in patch) body.teamId      = patch.teamId;
     if("assignees"in patch) body.assignees   = patch.assignees;
+    if("tags"     in patch) body.tags        = patch.tags;
+    if("subtasks" in patch) body.subtasks    = patch.subtasks;
     const {task} = await apiFetch(`/api/tasks/${id}`, {method:"PATCH", body:JSON.stringify(body)});
     return mapTask(task);
   },
