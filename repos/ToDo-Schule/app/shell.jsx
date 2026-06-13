@@ -222,7 +222,7 @@ function Sidebar({
   const navItems = [
     {id:"all",   icon:"inbox",    label:"Alle Aufgaben",   count: TASKS.filter(t=>t.status!=="done").length},
     {id:"mine",  icon:"user",     label:"Mir zugewiesen",  count: TASKS.filter(t=>t.assignees.includes(ME.id)&&t.status!=="done").length},
-    {id:"today", icon:"star",     label:"Heute fällig",    count: TASKS.filter(t=>t.due==="2026-06-13"&&t.status!=="done").length},
+    {id:"today", icon:"star",     label:"Heute fällig",    count: TASKS.filter(t=>t.due===new Date().toISOString().slice(0,10)&&t.status!=="done").length},
     {id:"done",  icon:"checkCircle",label:"Erledigt",      count: TASKS.filter(t=>t.status==="done").length},
   ];
 
