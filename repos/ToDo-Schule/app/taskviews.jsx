@@ -1,10 +1,13 @@
 // ========================================================================
-//  ToDo-Schule — List View & Board View
+//  ToDo-Schule — List View, Board View, Kiosk View, Subbar
 // ========================================================================
 (function(){
-const {useState,useMemo} = React;
-const {createElement:h,Fragment} = React;
+const {useState, useMemo, useRef} = React;
+const {createElement:h, Fragment} = React;
 const {TASKS, TEAMS} = window.ESG_DATA;
+
+const TODAY = new Date().toISOString().slice(0,10);
+const PRI_ORDER = {high:0, medium:1, low:2};
 
 /* ── Filter bar ──────────────────────────────────────────────────────── */
 function FilterBar({filters, setFilters}){
@@ -15,11 +18,7 @@ function FilterBar({filters, setFilters}){
     {k:"overdue", v:true,     label:"Überfällig"},
   ];
   function toggle(k,v){
-    setFilters(prev => {
-      const cur = prev[k];
-      if(cur===v) return {...prev,[k]:null};
-      return {...prev,[k]:v};
-    });
+    setFilters(prev => ({...prev,[k]: prev[k]===v ? null : v}));
   }
   return h("div",{className:"filterpills"},
     h("span",{style:{fontSize:12.5,fontWeight:600,color:"var(--text-3)",marginRight:4,display:"flex",alignItems:"center",gap:5}},
@@ -38,6 +37,8 @@ function FilterBar({filters, setFilters}){
 /* ── Task row (list view) ────────────────────────────────────────────── */
 function TaskRow({task, onOpen, onToggleDone}){
   const team = TEAMS.find(t=>t.id===task.teamId);
+  const hasSubs = task.subtasks && task.subtasks.length > 0;
+  const doneSubs = hasSubs ? task.subtasks.filter(s=>s.done).length : 0;
   return h("div",{className:`trow ${task.status==="done"?"done":""}`,onClick:()=>onOpen(task)},
     h(PriEdge,{priority:task.priority}),
     h("button",{className:`check ${task.status==="done"?"on":""}`,
@@ -51,6 +52,12 @@ function TaskRow({task, onOpen, onToggleDone}){
         h(StatusChip,{status:task.status}),
         h(PriorityChip,{priority:task.priority}),
         h(DueChip,{due:task.due}),
+        hasSubs && h("span",{className:"chip chip-ghost",title:"Unteraufgaben"},
+          h(Icon,{n:"checkCircle",size:11}),` ${doneSubs}/${task.subtasks.length}`
+        ),
+        task.tags && task.tags.length > 0 && task.tags.slice(0,2).map(tag=>
+          h("span",{key:tag,className:"chip chip-tag"},tag)
+        ),
         team && h("span",{className:"chip chip-ghost"},
           h(TagDot,{color:team.color,size:8}),team.name
         )
@@ -77,24 +84,24 @@ function SkeletonRow(){
 }
 
 /* ── List View ───────────────────────────────────────────────────────── */
-function ListView({tasks, onOpen, onToggleDone, searchVal, filters, loading}){
-  const today = "2026-06-12";
+function ListView({tasks, onOpen, onToggleDone, searchVal, filters, loading, sortBy}){
   const filtered = useMemo(()=>{
     let t = [...tasks];
     if(searchVal) t = t.filter(tk=>tk.title.toLowerCase().includes(searchVal.toLowerCase()));
     if(filters.priority) t = t.filter(tk=>tk.priority===filters.priority);
-    if(filters.status) t = t.filter(tk=>tk.status===filters.status);
-    if(filters.overdue) t = t.filter(tk=>tk.due && tk.due < today && tk.status!=="done");
+    if(filters.status)   t = t.filter(tk=>tk.status===filters.status);
+    if(filters.overdue)  t = t.filter(tk=>tk.due && tk.due < TODAY && tk.status!=="done");
+    if(sortBy==="due")      t.sort((a,b)=>{ if(!a.due&&!b.due) return 0; if(!a.due) return 1; if(!b.due) return -1; return a.due.localeCompare(b.due); });
+    else if(sortBy==="priority") t.sort((a,b)=>(PRI_ORDER[a.priority]??1)-(PRI_ORDER[b.priority]??1));
+    else if(sortBy==="name")     t.sort((a,b)=>a.title.localeCompare(b.title,"de"));
     return t;
-  },[tasks,searchVal,filters]);
+  },[tasks,searchVal,filters,sortBy]);
 
   const inProg = filtered.filter(t=>t.status==="in_progress");
   const todo   = filtered.filter(t=>t.status==="todo");
   const done   = filtered.filter(t=>t.status==="done");
 
-  if(loading) return h("div",{className:"tasklist"},
-    [1,2,3,4,5].map(i=>h(SkeletonRow,{key:i}))
-  );
+  if(loading) return h("div",{className:"tasklist"},[1,2,3,4,5].map(i=>h(SkeletonRow,{key:i})));
 
   if(!filtered.length) return h("div",{className:"empty"},
     h("div",{className:"ic"},h(Icon,{n:"checkCircle",size:28})),
@@ -123,9 +130,17 @@ function ListView({tasks, onOpen, onToggleDone, searchVal, filters, loading}){
 }
 
 /* ── Board card ──────────────────────────────────────────────────────── */
-function BoardCard({task, onOpen}){
+function BoardCard({task, onOpen, onDragStart, onDragEnd}){
   const team = TEAMS.find(t=>t.id===task.teamId);
-  return h("div",{className:`bcard ${task.status==="done"?"done":""}`,onClick:()=>onOpen(task)},
+  const hasSubs = task.subtasks && task.subtasks.length > 0;
+  const doneSubs = hasSubs ? task.subtasks.filter(s=>s.done).length : 0;
+  return h("div",{
+    className:`bcard ${task.status==="done"?"done":""}`,
+    draggable:true,
+    onClick:()=>onOpen(task),
+    onDragStart:e=>onDragStart(e,task),
+    onDragEnd:onDragEnd,
+  },
     h("div",{className:"bc-top"},
       h(PriorityChip,{priority:task.priority}),
       team && h("span",{className:"chip chip-ghost",style:{fontSize:11.5,height:22,padding:"0 8px"}},
@@ -133,6 +148,9 @@ function BoardCard({task, onOpen}){
       )
     ),
     h("div",{className:"bc-t"},task.title),
+    hasSubs && h("div",{className:"bc-subs"},
+      h(Icon,{n:"checkCircle",size:11}),` ${doneSubs}/${task.subtasks.length}`
+    ),
     h("div",{className:"bc-foot"},
       h(DueChip,{due:task.due}),
       h("div",{className:"sp"}),
@@ -151,11 +169,41 @@ const COLS = [
   {key:"done",        label:"Erledigt",      dot:"var(--st-done)"},
 ];
 
-function BoardView({tasks, onOpen, onNewTask}){
+function BoardView({tasks, onOpen, onNewTask, onMoveTask}){
+  const [dragOver, setDragOver] = useState(null);
+  const dragTask = useRef(null);
+
+  function handleDragStart(e, task){
+    dragTask.current = task;
+    e.dataTransfer.effectAllowed = "move";
+  }
+  function handleDragEnd(){
+    dragTask.current = null;
+    setDragOver(null);
+  }
+  function handleDragOver(e, colKey){
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if(dragTask.current && dragTask.current.status !== colKey) setDragOver(colKey);
+  }
+  function handleDrop(e, targetStatus){
+    e.preventDefault();
+    const t = dragTask.current;
+    dragTask.current = null;
+    setDragOver(null);
+    if(t && t.status !== targetStatus && onMoveTask) onMoveTask(t.id, targetStatus);
+  }
+
   return h("div",{className:"board"},
     COLS.map(col => {
       const cards = tasks.filter(t=>t.status===col.key);
-      return h("div",{key:col.key,className:"bcol"},
+      const isOver = dragOver === col.key;
+      return h("div",{key:col.key,
+        className:`bcol ${isOver?"drag-over":""}`,
+        onDragOver:e=>handleDragOver(e,col.key),
+        onDragLeave:()=>{ if(dragTask.current) setDragOver(null); },
+        onDrop:e=>handleDrop(e,col.key),
+      },
         h("div",{className:"bcol-h"},
           h("span",{className:"tick",style:{background:col.dot}}),
           h("span",{className:"nm"},col.label),
@@ -166,10 +214,12 @@ function BoardView({tasks, onOpen, onNewTask}){
         ),
         h("div",{className:"bcol-body"},
           cards.length === 0
-            ? h("div",{style:{padding:"14px 4px",color:"var(--text-3)",fontSize:13,textAlign:"center"}},
-                "Keine Aufgaben"
+            ? h("div",{className:"bcol-empty"},
+                h(Icon,{n:"inbox",size:20}),
+                h("span",null,"Keine Aufgaben")
               )
-            : cards.map(t=>h(BoardCard,{key:t.id,task:t,onOpen}))
+            : cards.map(t=>h(BoardCard,{key:t.id,task:t,onOpen,
+                onDragStart:handleDragStart,onDragEnd:handleDragEnd}))
         ),
         h("button",{className:"bcard-add",onClick:onNewTask},
           h(Icon,{n:"plus",size:14}),"Aufgabe hinzufügen"
@@ -179,13 +229,102 @@ function BoardView({tasks, onOpen, onNewTask}){
   );
 }
 
-/* ── Subbar wrapper (filters + new task) ─────────────────────────────── */
-function Subbar({filters, setFilters, view, setView}){
-  return h("div",{className:"subbar"},
-    h(FilterBar,{filters,setFilters}),
-    h("div",{className:"sp"})
+/* ── Kiosk View (Tagesansicht für Klassenzimmer) ─────────────────────── */
+function KioskView({tasks, onToggleDone}){
+  const urgent  = tasks.filter(t=>t.status!=="done"&&(t.due===TODAY||t.status==="in_progress"));
+  const pending = tasks.filter(t=>t.status==="todo"&&t.due!==TODAY);
+  const done    = tasks.filter(t=>t.status==="done");
+
+  function KioskCard({task}){
+    const team = TEAMS.find(t=>t.id===task.teamId);
+    return h("div",{
+      className:`kiosk-card ${task.status==="in_progress"?"active":""}`,
+      onClick:()=>onToggleDone(task.id),
+    },
+      h("div",{className:"kiosk-card-bar",style:{background:team?.color||"var(--accent)"}}),
+      h("div",{className:"kiosk-card-body"},
+        h("div",{className:"kiosk-card-title"},task.title),
+        h("div",{className:"kiosk-card-meta"},
+          team && h("span",null,team.icon," ",team.name),
+          task.due && h("span",null,shortDate(task.due))
+        )
+      ),
+      h("div",{className:"kiosk-check"},
+        h(Icon,{n:"check",size:22})
+      )
+    );
+  }
+
+  return h("div",{className:"kiosk"},
+    h("div",{className:"kiosk-header"},
+      h("div",{className:"kiosk-date"},
+        new Date().toLocaleDateString("de-DE",{weekday:"long",year:"numeric",month:"long",day:"numeric"})
+      ),
+      h("div",{className:"kiosk-stats"},
+        h("span",null,`${urgent.length + pending.length} offen`),
+        h("span",null,"·"),
+        h("span",null,`${done.length} erledigt`)
+      )
+    ),
+    urgent.length > 0 && h(Fragment,null,
+      h("div",{className:"kiosk-section-h"},"Heute & In Bearbeitung"),
+      h("div",{className:"kiosk-grid"},urgent.map(t=>h(KioskCard,{key:t.id,task:t})))
+    ),
+    pending.length > 0 && h(Fragment,null,
+      h("div",{className:"kiosk-section-h"},"Ausstehend"),
+      h("div",{className:"kiosk-grid"},pending.map(t=>h(KioskCard,{key:t.id,task:t})))
+    ),
+    urgent.length===0&&pending.length===0 && h("div",{className:"kiosk-empty"},
+      h("div",{style:{fontSize:64}},"✅"),
+      h("h2",null,"Alles erledigt!"),
+      h("p",null,"Keine offenen Aufgaben für heute.")
+    )
   );
 }
 
-Object.assign(window,{ListView, BoardView, Subbar, FilterBar});
+/* ── CSV Export ──────────────────────────────────────────────────────── */
+function exportToCSV(tasks){
+  const headers = ["Titel","Status","Priorität","Fällig am","Bereich","Zugewiesen","Erstellt am"];
+  const STATUS_DE = {todo:"Offen",in_progress:"In Bearbeitung",done:"Erledigt"};
+  const PRI_DE    = {high:"Hoch",medium:"Mittel",low:"Niedrig"};
+  const rows = tasks.map(t=>[
+    `"${(t.title||"").replace(/"/g,'""')}"`,
+    STATUS_DE[t.status]||t.status,
+    PRI_DE[t.priority]||t.priority,
+    t.due||"",
+    (TEAMS.find(x=>x.id===t.teamId)?.name)||"",
+    (t.assignees||[]).length,
+    t.createdAt?t.createdAt.slice(0,10):"",
+  ]);
+  const csv = [headers.join(";"),...rows.map(r=>r.join(";"))].join("\n");
+  const blob = new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
+  const url  = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement("a"),{href:url,download:`aufgaben-${TODAY}.csv`});
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ── Subbar wrapper ──────────────────────────────────────────────────── */
+function Subbar({filters, setFilters, view, setView, sortBy, setSortBy, tasks}){
+  return h("div",{className:"subbar"},
+    h(FilterBar,{filters,setFilters}),
+    h("div",{className:"sp"}),
+    view==="list" && h("select",{
+      className:"input btn-sm",
+      style:{fontSize:13,height:32,width:"auto",paddingLeft:10,paddingRight:28,cursor:"pointer"},
+      value:sortBy||"default",onChange:e=>setSortBy(e.target.value),title:"Sortierung"
+    },
+      h("option",{value:"default"},"Standard"),
+      h("option",{value:"due"},"Fälligkeit"),
+      h("option",{value:"priority"},"Priorität"),
+      h("option",{value:"name"},"Name A–Z")
+    ),
+    tasks && tasks.length > 0 && h("button",{
+      className:"iconbtn btn-sm",title:"Als CSV exportieren",
+      onClick:()=>exportToCSV(tasks)
+    },h(Icon,{n:"download",size:15}))
+  );
+}
+
+Object.assign(window,{ListView, BoardView, KioskView, Subbar, FilterBar, exportToCSV});
 })();

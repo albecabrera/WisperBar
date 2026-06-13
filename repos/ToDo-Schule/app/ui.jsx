@@ -46,7 +46,7 @@ function PriorityChip({priority}){
 
 function DueChip({due}){
   if(!due) return null;
-  const today = new Date("2026-06-12"); const d = new Date(due);
+  const today = new Date(); const d = new Date(due);
   const diff = Math.round((d-today)/86400000);
   const cls = diff < 0 ? "over" : diff <= 2 ? "soon" : "";
   const label = diff < 0 ? `${-diff}d überfällig`

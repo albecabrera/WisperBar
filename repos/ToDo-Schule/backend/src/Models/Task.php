@@ -59,8 +59,8 @@ final class Task extends Model
     {
         $pdo = self::db();
         $stmt = $pdo->prepare(
-            'INSERT INTO tasks (title, description, status, priority, due_date, remind_at, team_id, created_by)
-             VALUES (:title, :description, :status, :priority, :due_date, :remind_at, :team_id, :created_by)'
+            'INSERT INTO tasks (title, description, status, priority, due_date, remind_at, team_id, created_by, subtasks, tags)
+             VALUES (:title, :description, :status, :priority, :due_date, :remind_at, :team_id, :created_by, :subtasks, :tags)'
         );
         $stmt->execute([
             ':title'       => $data['title'],
@@ -71,6 +71,8 @@ final class Task extends Model
             ':remind_at'   => $data['remindAt']   ?? null,
             ':team_id'     => $data['teamId']     ?? null,
             ':created_by'  => $userId,
+            ':subtasks'    => isset($data['subtasks']) ? json_encode($data['subtasks']) : null,
+            ':tags'        => isset($data['tags'])     ? json_encode($data['tags'])     : null,
         ]);
         $id = (int) $pdo->lastInsertId();
 
@@ -96,6 +98,7 @@ final class Task extends Model
             'remindAt'    => 'remind_at',
             'teamId'      => 'team_id',
         ];
+        $jsonFields = ['subtasks', 'tags'];
 
         $set = [];
         $params = [':id' => $id];
@@ -110,6 +113,13 @@ final class Task extends Model
                 if ((string) $oldVal !== (string) $newVal) {
                     $changes[$input] = ['from' => $oldVal, 'to' => $newVal];
                 }
+            }
+        }
+
+        foreach ($jsonFields as $field) {
+            if (array_key_exists($field, $data)) {
+                $set[] = "$field = :$field";
+                $params[":$field"] = is_array($data[$field]) ? json_encode($data[$field]) : null;
             }
         }
 
@@ -177,6 +187,8 @@ final class Task extends Model
     private static function withAssignees(array $task): array
     {
         $task['assignees'] = self::assigneeIds((int) $task['id']);
+        $task['subtasks']  = !empty($task['subtasks']) ? (json_decode($task['subtasks'], true) ?? []) : [];
+        $task['tags']      = !empty($task['tags'])     ? (json_decode($task['tags'],     true) ?? []) : [];
         return $task;
     }
 }

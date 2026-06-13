@@ -56,7 +56,7 @@ function useToasts(){
 
 /* ── Filter tasks by activeTeam ──────────────────────────────────────── */
 function filterTasks(tasks, activeTeam){
-  const today = "2026-06-12";
+  const today = new Date().toISOString().slice(0,10);
   if(activeTeam==="all")   return tasks;
   if(activeTeam==="mine")  return tasks.filter(t=>t.assignees.includes(ME.id));
   if(activeTeam==="today") return tasks.filter(t=>t.due===today&&t.status!=="done");
@@ -195,10 +195,14 @@ function App(){
   const [welcome, setWelcome] = useState(null); // {greet,name,out} — Vollbild-Begrüßung
   const [showNotifs, setShowNotifs]= useState(false);
   const [searchVal, setSearchVal]  = useState("");
-  const [filters, setFilters]      = useState({priority:null,status:null,overdue:null});
+  const [filters, setFilters]      = useState(()=>{ try{ const s=localStorage.getItem("task-filters"); return s?JSON.parse(s):{priority:null,status:null,overdue:null}; }catch{ return {priority:null,status:null,overdue:null}; } });
+  useEffect(()=>{ localStorage.setItem("task-filters",JSON.stringify(filters)); },[filters]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [sbWidth, setSbWidth] = useState(()=>{ const s=localStorage.getItem("sb-width"); return s?Math.max(180,Math.min(420,Number(s))):264; });
   const [sbCollapsed, setSbCollapsed] = useState(()=>localStorage.getItem("sb-collapsed")==="1");
+  const [sortBy, setSortBy] = useState("default");
+  const [demoMode, setDemoMode] = useState(false);
+  const [defaultDue, setDefaultDue] = useState(null);
   const {list:toasts,add:addToast,dismiss:dismissToast} = useToasts();
 
   const unread = notifs.filter(n=>!n.read).length;
@@ -284,6 +288,25 @@ function App(){
       }
     }
     setOpenTask(null);
+  }
+
+  // moveTask — Board DnD status change
+  function moveTask(id, status){
+    const prev = tasks.find(t=>t.id===id);
+    setTasks(ts=>ts.map(t=>t.id===id?{...t,status}:t));
+    if(window.ESG_API.hasSession()){
+      window.ESG_API.updateTask(id,{status}).catch(()=>{
+        if(prev) setTasks(ts=>ts.map(t=>t.id===id?prev:t));
+        addToast({title:"Fehler",body:"Status konnte nicht geändert werden."});
+      });
+    }
+  }
+
+  // openTaskById — open task drawer from notification
+  function openTaskById(taskId){
+    const t = tasks.find(x=>x.id===Number(taskId));
+    if(t) setOpenTask(t);
+    setShowNotifs(false);
   }
 
   // deleteTask — optimistisch, Drawer schließen
@@ -479,6 +502,7 @@ function App(){
       }
     }).catch(err=>{
       console.warn("Backend nicht erreichbar, Mock-Daten bleiben aktiv:", err);
+      setDemoMode(true);
       addToast({title:"Offline",body:"Backend nicht erreichbar — Demo-Daten werden angezeigt."});
     }).finally(()=>setLoadingTasks(false));
   },[screen]);
@@ -605,9 +629,18 @@ function App(){
         // Team banner
         section==="tasks" && h(TeamBanner,{activeTeam,tasks}),
 
+        // Demo mode banner
+        demoMode && h("div",{className:"demo-banner"},
+          h(Icon,{n:"alertCircle",size:14}),
+          "Demo-Modus — Backend nicht erreichbar. Änderungen werden nicht gespeichert.",
+          h("button",{className:"iconbtn btn-sm",onClick:()=>setDemoMode(false),style:{marginLeft:"auto"}},
+            h(Icon,{n:"x",size:13})
+          )
+        ),
+
         // Notification panel (positioned relative to main)
         showNotifs && h("div",{style:{position:"relative",zIndex:40}},
-          h(NotificationPanel,{onClose:()=>setShowNotifs(false),notifs,setNotifs})
+          h(NotificationPanel,{onClose:()=>setShowNotifs(false),notifs,setNotifs,onOpenTask:openTaskById})
         ),
 
         h("div",{className:"content"},
@@ -615,12 +648,14 @@ function App(){
             section==="notes"
               ? h(NotesView,{notes,onSave:saveNote,onDelete:deleteNote,searchVal})
               : h(Fragment,null,
-                  h(Subbar,{filters,setFilters,view,setView}),
+                  h(Subbar,{filters,setFilters,view,setView,sortBy,setSortBy,tasks:visibleTasks}),
                   view==="list"
-                    ? h(ListView,{tasks:visibleTasks,onOpen:setOpenTask,onToggleDone:toggleDone,searchVal,filters,loading:loadingTasks})
+                    ? h(ListView,{tasks:visibleTasks,onOpen:setOpenTask,onToggleDone:toggleDone,searchVal,filters,loading:loadingTasks,sortBy})
+                    : view==="board"
+                    ? h(BoardView,{tasks:visibleTasks,onOpen:setOpenTask,onNewTask:()=>setShowNewTask(true),onMoveTask:moveTask})
                     : view==="calendar"
-                    ? h(CalendarView,{tasks:visibleTasks,onOpen:setOpenTask})
-                    : h(BoardView,{tasks:visibleTasks,onOpen:setOpenTask,onNewTask:()=>setShowNewTask(true)})
+                    ? h(CalendarView,{tasks:visibleTasks,onOpen:setOpenTask,onNewTask:(date)=>{setDefaultDue(date);setShowNewTask(true);}})
+                    : h(KioskView,{tasks:visibleTasks,onToggleDone:toggleDone})
                 )
           )
         ),
@@ -648,7 +683,7 @@ function App(){
     shareTask && h(ShareModal,{task:shareTask,onClose:()=>setShareTask(null)}),
 
     // New task modal
-    showNewTask && h(NewTaskModal,{onClose:()=>setShowNewTask(false),onAdd:addTask,defaultTeam:activeTeam}),
+    showNewTask && h(NewTaskModal,{onClose:()=>{ setShowNewTask(false); setDefaultDue(null); },onAdd:addTask,defaultTeam:activeTeam,defaultDue}),
 
     // Erstpasswort-Zwang: nach erstem Login Passwortwechsel einfordern
     mustChangePass && h(ChangePasswordModal,{

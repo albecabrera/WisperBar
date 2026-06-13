@@ -110,6 +110,11 @@ final class AttachmentController
             throw new HttpException(404, 'Not found');
         }
 
+        if ($att['task_id'] !== null) {
+            $task = Policy::task((int) $att['task_id']);
+            Policy::assertView($task, $req->userId());
+        }
+
         $path = self::uploadsDir() . '/' . $att['filename'];
         if (!file_exists($path)) {
             throw new HttpException(404, 'File missing from storage');

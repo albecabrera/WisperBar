@@ -42,7 +42,7 @@ function TeamPopup({team, onClose, onRename, onDelete, onUpdate, onNewTask, onIn
     try{
       if(window.ESG_API.hasSession()) await window.ESG_API.invite(team.id, inviteEmail.trim());
       onInvite && onInvite(team.id, inviteEmail.trim());
-    }catch(e){ alert(e.error||"Einladung fehlgeschlagen."); }
+    }catch(e){ window._addToast()({title:"Einladung fehlgeschlagen",body:e.error||"Bitte erneut versuchen."}); }
     finally{ setInviting(false); onClose(); }
   }
 
@@ -127,6 +127,7 @@ function Sidebar({
   onUpdateTeam, onReorderTeams, onNewTaskInTeam,
   width, collapsed, onWidthChange, onToggleCollapse
 }){
+  const [profileOpen, setProfileOpen] = useState(false);
   const [renaming, setRenaming] = useState(null);
   const [tmpName, setTmpName]   = useState("");
   const [creating, setCreating] = useState(false);
@@ -225,7 +226,7 @@ function Sidebar({
     {id:"done",  icon:"checkCircle",label:"Erledigt",      count: TASKS.filter(t=>t.status==="done").length},
   ];
 
-  const sbW = collapsed ? 0 : (width || 264);
+  const sbW = collapsed ? 52 : (width || 264);
 
   return h("aside",{className:`sidebar ${open?"open":""}`, id:"sidebar", style:{width:sbW}},
     // Resizer handle (only when not collapsed)
@@ -234,6 +235,28 @@ function Sidebar({
       onMouseDown:onResizerMouseDown,
       title:"Breite anpassen",
     }),
+
+    // Profile modal
+    profileOpen && h(ProfileModal,{onClose:()=>setProfileOpen(false)}),
+
+    // Rail (collapsed state)
+    collapsed ? h("div",{className:"sb-rail"},
+      h("div",{className:"sb-rail-logo"},
+        h("div",{className:"brand-tile",style:{width:34,height:34,borderRadius:10,border:"1px solid var(--border)"}},
+          h("img",{src:"assets/esg-mark.svg",alt:"ESG"})
+        )
+      ),
+      navItems.map(it=>h("button",{
+        key:it.id,
+        className:`iconbtn ${section==="tasks"&&activeTeam===it.id?"btn-soft":""}`,
+        title:it.label,
+        onClick:()=>{ setActiveTeam(it.id); onClose(); }
+      }, h(Icon,{n:it.icon,size:18}))),
+      h("div",{style:{flex:1}}),
+      h("button",{className:"iconbtn",onClick:onToggleCollapse,title:"Sidebar einblenden"},
+        h(Icon,{n:"chevronRight",size:16})
+      )
+    ) :
 
     h("div",{className:"sb-inner"},
     h("div",{className:"sb-brand"},
@@ -390,7 +413,7 @@ function Sidebar({
     ),
 
     h("div",{className:"sb-foot"},
-      h("button",{className:"userchip"},
+      h("button",{className:"userchip",onClick:()=>setProfileOpen(true)},
         h(Avatar,{userId:ME.id,size:"sm",showPresence:true}),
         h("div",null,
           h("div",{className:"nm"},ME.name),
@@ -454,6 +477,9 @@ function Topbar({activeTeam, section, view, setView, notifCount, onBell, onMenuO
         ),
         h("button",{className:view==="calendar"?"on":"",onClick:()=>setView("calendar"),title:"Kalender"},
           h(Icon,{n:"calendar",size:15}), "Kalender"
+        ),
+        h("button",{className:view==="kiosk"?"on":"",onClick:()=>setView("kiosk"),title:"Kiosk-Anzeige"},
+          h(Icon,{n:"monitor",size:15}), "Kiosk"
         )
       ),
 
@@ -470,6 +496,94 @@ function Topbar({activeTeam, section, view, setView, notifCount, onBell, onMenuO
       ),
 
       h(Avatar,{userId:ME.id,size:"sm",showPresence:true,style:{cursor:"pointer"}})
+    )
+  );
+}
+
+/* ── Profile Modal ───────────────────────────────────────────────────── */
+function ProfileModal({onClose}){
+  const [name, setName]     = useState(ME.name);
+  const [oldPass, setOldPass] = useState("");
+  const [newPass, setNewPass] = useState("");
+  const [busy, setBusy]     = useState(false);
+  const [msg, setMsg]       = useState(null);
+  const avatarRef = useRef();
+  const [avatarFile, setAvatarFile] = useState(null);
+  const hasAPI = window.ESG_API.hasSession();
+
+  async function save(e){
+    e.preventDefault();
+    setBusy(true); setMsg(null);
+    try{
+      const patch = {};
+      if(name.trim() && name.trim()!==ME.name) patch.name = name.trim();
+      if(newPass.length>=8){
+        if(!oldPass){ setMsg("Aktuelles Passwort eingeben."); setBusy(false); return; }
+        patch.password = newPass;
+        patch.currentPassword = oldPass;
+      }
+      if(avatarFile){
+        patch.avatarUrl = await new Promise(res=>{
+          const r=new FileReader(); r.onloadend=()=>res(r.result); r.readAsDataURL(avatarFile);
+        });
+      }
+      if(!Object.keys(patch).length){ setMsg("Keine Änderungen."); setBusy(false); return; }
+      if(hasAPI) await window.ESG_API.updateMe(patch);
+      if(patch.name){ ME.name=patch.name; ME.initials=patch.name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase(); }
+      window._addToast()({title:"Profil gespeichert",body:"Änderungen wurden übernommen.",icon:"checkCircle",color:"var(--st-done-bg)",iconColor:"var(--st-done)"});
+      onClose();
+    }catch(err){ setMsg(err.error||"Fehler beim Speichern."); }
+    finally{ setBusy(false); }
+  }
+
+  return h(Fragment,null,
+    h("div",{className:"scrim",onClick:onClose}),
+    h("div",{className:"modal"},
+      h("div",{className:"modal-card"},
+        h("div",{className:"modal-head"},
+          h("div",{style:{width:42,height:42,borderRadius:13,background:"var(--accent-soft)",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--accent)"}},
+            h(Icon,{n:"person",size:20})
+          ),
+          h("div",null,
+            h("h3",null,"Profil & Einstellungen"),
+            h("p",{style:{fontSize:13,color:"var(--text-2)",margin:"2px 0 0"}},ME.email||ME.role)
+          ),
+          h("div",{className:"sp"}),
+          h("button",{className:"iconbtn btn-sm",onClick:onClose},h(Icon,{n:"x",size:16}))
+        ),
+        h("form",{onSubmit:save},
+          h("div",{className:"modal-body"},
+            h("div",{className:"field"},
+              h("label",null,"Name"),
+              h("input",{className:"input input-lg",value:name,onChange:e=>setName(e.target.value),autoFocus:true})
+            ),
+            hasAPI && h(Fragment,null,
+              h("div",{className:"field"},
+                h("label",null,"Aktuelles Passwort (nur bei Passwortwechsel)"),
+                h("input",{className:"input input-lg",type:"password",value:oldPass,onChange:e=>setOldPass(e.target.value),placeholder:"Leer lassen wenn kein Wechsel"})
+              ),
+              h("div",{className:"field"},
+                h("label",null,"Neues Passwort"),
+                h("input",{className:"input input-lg",type:"password",value:newPass,onChange:e=>setNewPass(e.target.value),placeholder:"Mindestens 8 Zeichen"})
+              ),
+              h("div",{className:"field"},
+                h("label",null,"Profilfoto"),
+                h("input",{ref:avatarRef,type:"file",accept:"image/*",style:{display:"none"},onChange:e=>setAvatarFile(e.target.files[0]||null)}),
+                h("button",{type:"button",className:"btn btn-ghost btn-sm",onClick:()=>avatarRef.current?.click()},
+                  h(Icon,{n:"upload",size:14}),"Bild auswählen"
+                ),
+                avatarFile && h("span",{style:{fontSize:12,color:"var(--text-2)",marginLeft:8}},avatarFile.name)
+              )
+            ),
+            msg && h("div",{style:{color:"var(--st-high,#c0392b)",fontSize:13,fontWeight:600,marginTop:8}},msg)
+          ),
+          h("div",{className:"modal-foot"},
+            h("div",{className:"sp"}),
+            h("button",{type:"button",className:"btn btn-outline",onClick:onClose},"Abbrechen"),
+            h("button",{type:"submit",className:"btn btn-primary",disabled:busy},busy?"Speichern…":"Profil speichern")
+          )
+        )
+      )
     )
   );
 }

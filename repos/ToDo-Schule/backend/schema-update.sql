@@ -31,6 +31,11 @@ CREATE TABLE IF NOT EXISTS attachments (
   CONSTRAINT fk_att_user FOREIGN KEY (uploaded_by) REFERENCES users  (id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+-- Subtasks y tags en tareas (JSON arrays)
+ALTER TABLE tasks
+  ADD COLUMN IF NOT EXISTS subtasks TEXT NULL AFTER remind_at,
+  ADD COLUMN IF NOT EXISTS tags     TEXT NULL AFTER subtasks;
+
 -- Notificaciones persistentes
 CREATE TABLE IF NOT EXISTS notifications (
   id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

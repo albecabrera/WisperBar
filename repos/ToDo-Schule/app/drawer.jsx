@@ -192,7 +192,7 @@ function TaskDrawer({task, onClose, onToggleDone, onShare, onSave, onDelete}){
     try{
       const att = await window.ESG_API.uploadAttachment(task.id, file);
       setAttachments(prev=>[...prev,att]);
-    }catch(err){ alert("Upload fehlgeschlagen: " + (err.error||err.message)); }
+    }catch(err){ window._addToast()({title:"Upload fehlgeschlagen",body:err.error||err.message}); }
     finally{ setUploadingFile(false); e.target.value=""; }
   }
 
@@ -335,6 +335,30 @@ function TaskDrawer({task, onClose, onToggleDone, onShare, onSave, onDelete}){
               })
             )
           ),
+          /* Tags */
+          h("div",{className:"dr-prop"},
+            h("div",{className:"k"},h(Icon,{n:"tag",size:15}),"Tags"),
+            h("div",{className:"v tags-v"},
+              (localTask.tags||[]).map(tag=>
+                h("span",{key:tag,className:"chip chip-tag"},
+                  tag,
+                  h("button",{className:"tag-rm",onClick:()=>update("tags",(localTask.tags||[]).filter(t=>t!==tag))},"×")
+                )
+              ),
+              h("input",{className:"tag-input input btn-sm",placeholder:"Tag + Enter",
+                style:{width:100,height:26},
+                onKeyDown:e=>{
+                  if(e.key==="Enter"&&e.target.value.trim()){
+                    e.preventDefault();
+                    const t=e.target.value.trim().toLowerCase();
+                    if(!(localTask.tags||[]).includes(t)) update("tags",[...(localTask.tags||[]),t]);
+                    e.target.value="";
+                  }
+                }
+              })
+            )
+          ),
+
           /* Created by */
           h("div",{className:"dr-prop"},
             h("div",{className:"k"},h(Icon,{n:"sparkle",size:15}),"Erstellt von"),
@@ -343,6 +367,45 @@ function TaskDrawer({task, onClose, onToggleDone, onShare, onSave, onDelete}){
               h("span",{style:{fontSize:13.5,color:"var(--text-2)",marginLeft:6}},userName(localTask.createdBy)),
               h("span",{style:{fontSize:12,color:"var(--text-3)",marginLeft:6}},relTime(localTask.createdAt))
             )
+          )
+        ),
+
+        /* Subtasks / Checklist */
+        h("div",{className:"dr-section-h"},
+          h("div",{className:"ln"}),
+          h("span",null,"Unteraufgaben",
+            (localTask.subtasks||[]).length>0 && h("span",{className:"att-count"},
+              `${(localTask.subtasks||[]).filter(s=>s.done).length}/${(localTask.subtasks||[]).length}`
+            )
+          ),
+          h("div",{className:"ln"})
+        ),
+        h("div",{className:"subtask-list"},
+          (localTask.subtasks||[]).map((sub,i)=>
+            h("div",{key:sub.id||i,className:`subtask-item ${sub.done?"done":""}`},
+              h("button",{className:`check ${sub.done?"on":""}`,
+                onClick:()=>{
+                  const next=[...(localTask.subtasks||[])];
+                  next[i]={...sub,done:!sub.done};
+                  update("subtasks",next);
+                }},h(Icon,{n:"check",size:11,strokeWidth:2.5})
+              ),
+              h("span",{className:"grow",style:{fontSize:13.5,color:"var(--text)"}},sub.text),
+              h("button",{className:"iconbtn btn-sm",style:{width:22,height:22,color:"var(--text-3)"},
+                onClick:()=>update("subtasks",(localTask.subtasks||[]).filter((_,j)=>j!==i))},
+                h(Icon,{n:"x",size:12})
+              )
+            )
+          ),
+          h("div",{className:"subtask-add"},
+            h("input",{className:"subtask-input",placeholder:"Unteraufgabe hinzufügen… (Enter)",
+              onKeyDown:e=>{
+                if(e.key==="Enter"&&e.target.value.trim()){
+                  update("subtasks",[...(localTask.subtasks||[]),{id:Date.now(),text:e.target.value.trim(),done:false}]);
+                  e.target.value="";
+                }
+              }
+            })
           )
         ),
 

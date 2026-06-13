@@ -7,7 +7,7 @@ const {createElement:h,Fragment} = React;
 const {ME, USERS, TEAMS, NOTIFICATIONS: INIT_NOTIFS} = window.ESG_DATA;
 
 /* ── Notification Panel ──────────────────────────────────────────────── */
-function NotificationPanel({onClose, notifs, setNotifs}){
+function NotificationPanel({onClose, notifs, setNotifs, onOpenTask}){
   const [tab, setTab] = useState("all");
   const ref = useRef();
   useEffect(()=>{
@@ -53,7 +53,8 @@ function NotificationPanel({onClose, notifs, setNotifs}){
           )
         : filtered.map(n => {
           const actor = USERS.find(u=>u.id===n.actor);
-          return h("div",{key:n.id,className:`notif ${!n.read?"unread":""}`,onClick:()=>markRead(n.id)},
+          return h("div",{key:n.id,className:`notif ${!n.read?"unread":""}`,
+            onClick:()=>{ markRead(n.id); if(n.taskId&&onOpenTask) onOpenTask(n.taskId); }},
             actor ? h(Avatar,{userId:n.actor,size:"xs"}) : h(NotifIcon,{type:n.type}),
             h("div",{className:"grow"},
               h("div",{className:"ntext",dangerouslySetInnerHTML:{__html:n.text}}),
@@ -75,7 +76,14 @@ function NotificationPanel({onClose, notifs, setNotifs}){
 function ShareModal({task, onClose}){
   const [perm, setPerm] = useState("view");
   const [copied, setCopied] = useState(false);
-  const link = `https://todo.esg-bonn.de/share/${task.id}-${Math.random().toString(36).slice(2,10)}`;
+  const [link, setLink] = useState(`${window.location.origin}${window.location.pathname}?share=${task.id}`);
+  useEffect(()=>{
+    if(!window.ESG_API.hasSession()) return;
+    window.ESG_API.fetch(`/api/tasks/${task.id}/share`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({permission:perm})})
+      .then(r=>r.json())
+      .then(d=>{ if(d.token) setLink(`${window.location.origin}${window.location.pathname}?share=${d.token}`); })
+      .catch(()=>{});
+  },[perm]);
 
   function copy(){
     navigator.clipboard?.writeText(link).catch(()=>{});
@@ -149,12 +157,12 @@ function ShareModal({task, onClose}){
 }
 
 /* ── New Task Modal ───────────────────────────────────────────────────── */
-function NewTaskModal({onClose, onAdd, defaultTeam}){
+function NewTaskModal({onClose, onAdd, defaultTeam, defaultDue}){
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
   const [priority, setPriority] = useState("medium");
   const [status, setStatus] = useState("todo");
-  const [due, setDue] = useState("");
+  const [due, setDue] = useState(defaultDue||"");
   const [remindAt, setRemindAt] = useState("");
   const [teamId, setTeamId] = useState(defaultTeam&&typeof defaultTeam==="number"?defaultTeam:null);
   const [assignees, setAssignees] = useState([]);
