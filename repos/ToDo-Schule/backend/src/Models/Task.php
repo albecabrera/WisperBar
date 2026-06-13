@@ -34,6 +34,10 @@ final class Task extends Model
             $sql .= ' AND t.team_id = :team';
             $params[':team'] = (int) $filters['teamId'];
         }
+        if (!empty($filters['q'])) {
+            $sql .= ' AND (t.title LIKE :q OR t.description LIKE :q)';
+            $params[':q'] = '%' . $filters['q'] . '%';
+        }
         $sql .= ' ORDER BY t.created_at DESC';
 
         $stmt = self::db()->prepare($sql);
@@ -55,16 +59,17 @@ final class Task extends Model
     {
         $pdo = self::db();
         $stmt = $pdo->prepare(
-            'INSERT INTO tasks (title, description, status, priority, due_date, team_id, created_by)
-             VALUES (:title, :description, :status, :priority, :due_date, :team_id, :created_by)'
+            'INSERT INTO tasks (title, description, status, priority, due_date, remind_at, team_id, created_by)
+             VALUES (:title, :description, :status, :priority, :due_date, :remind_at, :team_id, :created_by)'
         );
         $stmt->execute([
             ':title'       => $data['title'],
             ':description' => $data['description'] ?? null,
-            ':status'      => $data['status']   ?? 'todo',
-            ':priority'    => $data['priority'] ?? 'medium',
-            ':due_date'    => $data['dueDate']  ?? null,
-            ':team_id'     => $data['teamId']   ?? null,
+            ':status'      => $data['status']     ?? 'todo',
+            ':priority'    => $data['priority']   ?? 'medium',
+            ':due_date'    => $data['dueDate']    ?? null,
+            ':remind_at'   => $data['remindAt']   ?? null,
+            ':team_id'     => $data['teamId']     ?? null,
             ':created_by'  => $userId,
         ]);
         $id = (int) $pdo->lastInsertId();
@@ -88,6 +93,7 @@ final class Task extends Model
             'status'      => 'status',
             'priority'    => 'priority',
             'dueDate'     => 'due_date',
+            'remindAt'    => 'remind_at',
             'teamId'      => 'team_id',
         ];
 

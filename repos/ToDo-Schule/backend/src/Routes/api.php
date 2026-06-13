@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Routes;
 
+use App\Controllers\AttachmentController;
 use App\Controllers\AuditController;
 use App\Controllers\AuthController;
 use App\Controllers\CommentController;
+use App\Controllers\NotificationController;
 use App\Controllers\NoteController;
 use App\Controllers\ShareController;
 use App\Controllers\TaskController;
@@ -64,6 +66,7 @@ return (static function (): Router {
     $r->delete('/api/notes/:id', [NoteController::class, 'destroy'], ['auth' => true]);
 
     // --- Teams ----------------------------------------------------------------
+    $r->get('/api/teams',           [TeamController::class, 'index'],   ['auth' => true]);
     $r->post('/api/teams',          [TeamController::class, 'store'],   ['auth' => true]);
     $r->get('/api/teams/:id',       [TeamController::class, 'show'],    ['auth' => true]);
     $r->patch('/api/teams/:id',     [TeamController::class, 'update'],  ['auth' => true]);
@@ -72,6 +75,21 @@ return (static function (): Router {
 
     // --- Audit ----------------------------------------------------------------
     $r->get('/api/tasks/:id/audit', [AuditController::class, 'index'], ['auth' => true]);
+
+    // --- Anhänge (Tasks) -----------------------------------------------------
+    $r->get('/api/tasks/:id/attachments',                              [AttachmentController::class, 'indexTask'],  ['auth' => true]);
+    $r->post('/api/tasks/:id/attachments',                             [AttachmentController::class, 'uploadTask'], ['auth' => true]);
+    $r->delete('/api/tasks/:id/attachments/:attachId',                 [AttachmentController::class, 'destroy'],    ['auth' => true]);
+    $r->get('/api/tasks/:id/attachments/:attachId/download',           [AttachmentController::class, 'download'],   ['auth' => true]);
+
+    // --- Anhänge (Notes) -----------------------------------------------------
+    $r->get('/api/notes/:id/attachments',                              [AttachmentController::class, 'indexNote'],  ['auth' => true]);
+    $r->post('/api/notes/:id/attachments',                             [AttachmentController::class, 'uploadNote'], ['auth' => true]);
+
+    // --- Benachrichtigungen --------------------------------------------------
+    $r->get('/api/notifications',          [NotificationController::class, 'index'],       ['auth' => true]);
+    $r->patch('/api/notifications/:id',    [NotificationController::class, 'markRead'],    ['auth' => true]);
+    $r->post('/api/notifications/read-all',[NotificationController::class, 'markAllRead'], ['auth' => true]);
 
     return $r;
 })();

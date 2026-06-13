@@ -18,10 +18,26 @@ use App\Models\Team;
  */
 final class TeamController
 {
+    /** GET /api/teams — alle Teams des eingeloggten Nutzers. */
+    public static function index(Request $req): void
+    {
+        $teams = Team::allForUser($req->userId());
+        Response::json(['teams' => $teams]);
+    }
+
     public static function store(Request $req): void
     {
-        $data = Validator::make($req->body, ['name' => 'required|string|min:2|max:160']);
-        $team = Team::create($data['name'], $req->userId());
+        $data  = Validator::make($req->body, [
+            'name'  => 'required|string|min:2|max:160',
+            'color' => 'nullable|string|max:16',
+            'icon'  => 'nullable|string|max:8',
+        ]);
+        $team = Team::create(
+            $data['name'],
+            $req->userId(),
+            $data['color'] ?? '#6178FE',
+            $data['icon']  ?? '📁'
+        );
         Response::json(['team' => $team], 201);
     }
 
@@ -38,12 +54,16 @@ final class TeamController
         Response::json(['team' => $team]);
     }
 
-    /** Umbenennen — nur der Eigentümer. */
+    /** Umbenennen / Farbe / Icon — nur der Eigentümer. */
     public static function update(Request $req): void
     {
         $team = self::loadOwned($req);
-        $data = Validator::make($req->body, ['name' => 'required|string|min:2|max:160']);
-        $updated = Team::update((int) $team['id'], $data);
+        $data = Validator::make($req->body, [
+            'name'  => 'nullable|string|min:2|max:160',
+            'color' => 'nullable|string|max:16',
+            'icon'  => 'nullable|string|max:8',
+        ]);
+        $updated = Team::update((int) $team['id'], array_filter($data, fn($v) => $v !== null));
 
         Emitter::emit(Emitter::team((int) $team['id']), 'team:updated', ['team' => $updated]);
         Response::json(['team' => $updated]);

@@ -11,6 +11,7 @@ use App\Lib\Request;
 use App\Lib\Response;
 use App\Lib\Validator;
 use App\Models\AuditLog;
+use App\Models\Notification;
 use App\Models\Task;
 use App\Models\Team;
 use App\Models\User;
@@ -28,6 +29,7 @@ final class TaskController
         $filters = [
             'status' => $req->query['status'] ?? null,
             'teamId' => $req->query['teamId'] ?? null,
+            'q'      => !empty($req->query['q']) ? trim($req->query['q']) : null,
         ];
         $tasks = Task::allForUser($req->userId(), $filters);
         Response::json(['tasks' => $tasks]);
@@ -48,16 +50,17 @@ final class TaskController
             'status'      => 'nullable|in:todo,in_progress,done',
             'priority'    => 'nullable|in:low,medium,high',
             'dueDate'     => 'nullable|date',
+            'remindAt'    => 'nullable|date',
             'teamId'      => 'nullable|int',
             'assignees'   => 'nullable|array',
         ]);
 
-        // Team-Mitgliedschaft prüfen, falls Aufgabe einem Team zugeordnet wird.
         if (!empty($data['teamId']) && !Team::isMember((int) $data['teamId'], $req->userId())) {
             throw HttpException::forbidden('Du bist kein Mitglied dieses Teams', 'not_team_member');
         }
 
-        $data['dueDate'] = self::normalizeDate($data['dueDate'] ?? null);
+        $data['dueDate']  = self::normalizeDate($data['dueDate']  ?? null);
+        $data['remindAt'] = self::normalizeDate($data['remindAt'] ?? null);
         $task = Task::create($data, $req->userId());
 
         AuditLog::record((int) $task['id'], $req->userId(), 'task.created', [
@@ -82,12 +85,16 @@ final class TaskController
             'status'      => 'nullable|in:todo,in_progress,done',
             'priority'    => 'nullable|in:low,medium,high',
             'dueDate'     => 'nullable|date',
+            'remindAt'    => 'nullable|date',
             'teamId'      => 'nullable|int',
             'assignees'   => 'nullable|array',
         ]);
 
         if (array_key_exists('dueDate', $data)) {
             $data['dueDate'] = self::normalizeDate($data['dueDate']);
+        }
+        if (array_key_exists('remindAt', $data)) {
+            $data['remindAt'] = self::normalizeDate($data['remindAt']);
         }
 
         [$updated, $changes] = Task::update((int) $task['id'], $data);
@@ -185,6 +192,18 @@ final class TaskController
                 'title'  => $task['title'],
                 'by'     => $actorId,
             ]);
+            // Persistente Benachrichtigung in DB
+            try {
+                Notification::create([
+                    'user_id'  => $uid,
+                    'type'     => 'assigned',
+                    'actor_id' => $actorId,
+                    'task_id'  => (int) $task['id'],
+                    'text'     => "hat dich bei <b>{$task['title']}</b> als Verantwortliche:n eingetragen",
+                ]);
+            } catch (\Throwable) {
+                // Notifications-Tabelle evtl. noch nicht migriert — ignorieren
+            }
         }
     }
 

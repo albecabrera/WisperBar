@@ -213,7 +213,7 @@ function NotesView({notes, onSave, onDelete, searchVal}){
   const [editing,setEditing]       = useState(null);  // null | {} (neu) | note
 
   const visible = useMemo(()=>{
-    let list = notes;
+    let list = notes.filter(n=>n.title!=="Bugs");
     if(kindFilter!=="all") list = list.filter(n=>n.kind===kindFilter);
     if(searchVal){
       const q = searchVal.toLowerCase();

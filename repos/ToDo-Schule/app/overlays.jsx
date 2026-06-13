@@ -19,8 +19,14 @@ function NotificationPanel({onClose, notifs, setNotifs}){
   const filtered = tab==="all" ? notifs : notifs.filter(n=>!n.read);
   const unreadCount = notifs.filter(n=>!n.read).length;
 
-  function markAllRead(){ setNotifs(ns=>ns.map(n=>({...n,read:true}))); }
-  function markRead(id){ setNotifs(ns=>ns.map(n=>n.id===id?{...n,read:true}:n)); }
+  function markAllRead(){
+    setNotifs(ns=>ns.map(n=>({...n,read:true})));
+    if(window.ESG_API.hasSession()) window.ESG_API.markAllNotifsRead().catch(()=>{});
+  }
+  function markRead(id){
+    setNotifs(ns=>ns.map(n=>n.id===id?{...n,read:true}:n));
+    if(window.ESG_API.hasSession()) window.ESG_API.markNotifRead(id).catch(()=>{});
+  }
 
   return h("div",{ref,className:"notif-panel","aria-label":"Benachrichtigungen"},
     h("div",{className:"notif-head"},
@@ -149,14 +155,15 @@ function NewTaskModal({onClose, onAdd, defaultTeam}){
   const [priority, setPriority] = useState("medium");
   const [status, setStatus] = useState("todo");
   const [due, setDue] = useState("");
+  const [remindAt, setRemindAt] = useState("");
   const [teamId, setTeamId] = useState(defaultTeam&&typeof defaultTeam==="number"?defaultTeam:null);
   const [assignees, setAssignees] = useState([]);
 
   function submit(e){
     e.preventDefault();
     if(!title.trim()) return;
-    onAdd({id:Date.now(),title:title.trim(),desc,priority,status,due,teamId,assignees,
-      comments:0,createdBy:ME.id,createdAt:new Date().toISOString(),watched:true});
+    onAdd({id:Date.now(),title:title.trim(),desc,priority,status,due,remindAt:remindAt||null,
+      teamId,assignees,comments:0,createdBy:ME.id,createdAt:new Date().toISOString(),watched:true});
     onClose();
   }
 
@@ -203,12 +210,19 @@ function NewTaskModal({onClose, onAdd, defaultTeam}){
                   h("input",{type:"date",className:"input",value:due,onChange:e=>setDue(e.target.value)})
                 ),
                 h("div",{className:"field"},
+                  h("label",null,"Erinnerung"),
+                  h("input",{type:"datetime-local",className:"input",value:remindAt,onChange:e=>setRemindAt(e.target.value)})
+                )
+              ),
+              h("div",{className:"nt-row"},
+                h("div",{className:"field"},
                   h("label",null,"Bereich"),
                   h("select",{className:"input select",value:teamId||"",onChange:e=>setTeamId(e.target.value?Number(e.target.value):null)},
                     h("option",{value:""},"Kein Bereich"),
-                    TEAMS.filter(t=>t.id!==0).map(t=>h("option",{key:t.id,value:t.id},t.name))
+                    TEAMS.filter(t=>t.id!==0).map(t=>h("option",{key:t.id,value:t.id},`${t.icon} ${t.name}`))
                   )
-                )
+                ),
+                h("div",{className:"field"}) // spacer
               ),
               h("div",{className:"field"},
                 h("label",null,"Zuweisen"),

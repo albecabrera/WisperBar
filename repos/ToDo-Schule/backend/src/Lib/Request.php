@@ -34,7 +34,12 @@ final class Request
 
         parse_str($_SERVER['QUERY_STRING'] ?? '', $req->query);
 
-        $raw = file_get_contents('php://input') ?: '';
+        // Multipart-Uploads: php://input enthält keinen JSON-Body
+        $contentType = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
+        $raw = str_contains($contentType, 'multipart/form-data')
+            ? ''
+            : (file_get_contents('php://input') ?: '');
+
         if ($raw !== '') {
             $decoded = json_decode($raw, true);
             if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {

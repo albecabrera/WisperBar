@@ -22,6 +22,7 @@ FILES=(
   app/drawer.jsx
   app/overlays.jsx
   app/notes.jsx
+  app/calendar.jsx
   app/app.jsx
 )
 

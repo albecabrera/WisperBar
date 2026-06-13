@@ -65,8 +65,19 @@ function TaskRow({task, onOpen, onToggleDone}){
   );
 }
 
+/* ── Skeleton row ────────────────────────────────────────────────────── */
+function SkeletonRow(){
+  return h("div",{className:"trow",style:{pointerEvents:"none"}},
+    h("div",{className:"skel-line",style:{width:20,height:20,borderRadius:99,flex:"none"}}),
+    h("div",{className:"tbody",style:{gap:8}},
+      h("div",{className:"skel-line",style:{width:"60%",height:15}}),
+      h("div",{className:"skel-line",style:{width:"35%",height:12}})
+    )
+  );
+}
+
 /* ── List View ───────────────────────────────────────────────────────── */
-function ListView({tasks, onOpen, onToggleDone, searchVal, filters}){
+function ListView({tasks, onOpen, onToggleDone, searchVal, filters, loading}){
   const today = "2026-06-12";
   const filtered = useMemo(()=>{
     let t = [...tasks];
@@ -80,6 +91,10 @@ function ListView({tasks, onOpen, onToggleDone, searchVal, filters}){
   const inProg = filtered.filter(t=>t.status==="in_progress");
   const todo   = filtered.filter(t=>t.status==="todo");
   const done   = filtered.filter(t=>t.status==="done");
+
+  if(loading) return h("div",{className:"tasklist"},
+    [1,2,3,4,5].map(i=>h(SkeletonRow,{key:i}))
+  );
 
   if(!filtered.length) return h("div",{className:"empty"},
     h("div",{className:"ic"},h(Icon,{n:"checkCircle",size:28})),

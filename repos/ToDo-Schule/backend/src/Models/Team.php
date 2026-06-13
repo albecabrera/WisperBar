@@ -11,11 +11,11 @@ namespace App\Models;
  */
 final class Team extends Model
 {
-    public static function create(string $name, int $ownerId): array
+    public static function create(string $name, int $ownerId, string $color = '#6178FE', string $icon = '📁'): array
     {
         $pdo = self::db();
-        $pdo->prepare('INSERT INTO teams (name, owner_id) VALUES (:n, :o)')
-            ->execute([':n' => $name, ':o' => $ownerId]);
+        $pdo->prepare('INSERT INTO teams (name, color, icon, owner_id) VALUES (:n, :c, :i, :o)')
+            ->execute([':n' => $name, ':c' => $color, ':i' => $icon, ':o' => $ownerId]);
         $id = (int) $pdo->lastInsertId();
 
         // Eigentümer als Mitglied (Rolle owner) eintragen.
@@ -51,6 +51,25 @@ final class Team extends Model
         return $stmt->fetchAll();
     }
 
+    /** Alle Teams eines Nutzers (inkl. Mitglieder-IDs). */
+    public static function allForUser(int $userId): array
+    {
+        $ids = self::idsForUser($userId);
+        if (empty($ids)) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = self::db()->prepare(
+            "SELECT * FROM teams WHERE id IN ($placeholders) ORDER BY id ASC"
+        );
+        $stmt->execute($ids);
+        $teams = $stmt->fetchAll();
+        foreach ($teams as &$t) {
+            $t['members'] = array_map('intval', array_column(self::members((int)$t['id']), 'id'));
+        }
+        return $teams;
+    }
+
     /** @return int[] Team-IDs, in denen der Nutzer Mitglied ist. */
     public static function idsForUser(int $userId): array
     {
@@ -68,9 +87,13 @@ final class Team extends Model
 
     public static function update(int $id, array $data): array
     {
-        if (array_key_exists('name', $data)) {
-            self::db()->prepare('UPDATE teams SET name = :n WHERE id = :id')
-                ->execute([':n' => $data['name'], ':id' => $id]);
+        $set    = [];
+        $params = [':id' => $id];
+        if (array_key_exists('name', $data))  { $set[] = 'name = :name';   $params[':name']  = $data['name']; }
+        if (array_key_exists('color', $data)) { $set[] = 'color = :color'; $params[':color'] = $data['color']; }
+        if (array_key_exists('icon', $data))  { $set[] = 'icon = :icon';   $params[':icon']  = $data['icon']; }
+        if ($set !== []) {
+            self::db()->prepare('UPDATE teams SET ' . implode(', ', $set) . ' WHERE id = :id')->execute($params);
         }
         return self::find($id);
     }

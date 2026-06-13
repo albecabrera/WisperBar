@@ -146,6 +146,22 @@ function ChangePasswordModal({onDone, onSkip}){
   );
 }
 
+/* ── Error Boundary ──────────────────────────────────────────────────── */
+class ErrorBoundary extends React.Component {
+  constructor(props){ super(props); this.state={hasError:false,err:null}; }
+  static getDerivedStateFromError(err){ return {hasError:true,err}; }
+  componentDidCatch(err,info){ console.error("App error:", err, info); }
+  render(){
+    if(!this.state.hasError) return this.props.children;
+    return React.createElement("div",{className:"error-boundary"},
+      React.createElement(Icon,{n:"alertCircle",size:36,style:{color:"var(--coral)"}}),
+      React.createElement("h2",null,"Ein Fehler ist aufgetreten"),
+      React.createElement("p",null, this.state.err?.message || "Unbekannter Fehler"),
+      React.createElement("button",{className:"btn btn-outline",onClick:()=>this.setState({hasError:false,err:null})},"Erneut versuchen")
+    );
+  }
+}
+
 /* ── Main App ────────────────────────────────────────────────────────── */
 function App(){
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
@@ -180,6 +196,7 @@ function App(){
   const [showNotifs, setShowNotifs]= useState(false);
   const [searchVal, setSearchVal]  = useState("");
   const [filters, setFilters]      = useState({priority:null,status:null,overdue:null});
+  const [loadingTasks, setLoadingTasks] = useState(false);
   const {list:toasts,add:addToast,dismiss:dismissToast} = useToasts();
 
   const unread = notifs.filter(n=>!n.read).length;
@@ -251,6 +268,34 @@ function App(){
     }
   }
 
+  // updateTask — full patch, optimistisch, mit Toast bei Fehler
+  async function updateTask(patchedTask){
+    const prev = tasks.find(t=>t.id===patchedTask.id);
+    setTasks(ts=>ts.map(t=>t.id===patchedTask.id?{...t,...patchedTask}:t));
+    if(window.ESG_API.hasSession()){
+      try{
+        const saved = await window.ESG_API.updateTask(patchedTask.id, patchedTask);
+        setTasks(ts=>ts.map(t=>t.id===saved.id?{...t,...saved}:t));
+      }catch(err){
+        if(prev) setTasks(ts=>ts.map(t=>t.id===prev.id?prev:t));
+        addToast({title:"Fehler",body:err.error||"Aufgabe konnte nicht gespeichert werden."});
+      }
+    }
+    setOpenTask(null);
+  }
+
+  // deleteTask — optimistisch, Drawer schließen
+  function deleteTask(id){
+    setTasks(prev=>prev.filter(t=>t.id!==id));
+    setOpenTask(null);
+    addToast({title:"Aufgabe gelöscht",body:"Die Aufgabe wurde entfernt."});
+    if(window.ESG_API.hasSession()){
+      window.ESG_API.deleteTask(id).catch(()=>{
+        addToast({title:"Fehler",body:"Aufgabe konnte nicht gelöscht werden."});
+      });
+    }
+  }
+
   // Bereiche (Teams): umbenennen / löschen / anlegen.
   // TEAMS ist ein modulweites Array — in place mutieren + Re-Render erzwingen,
   // damit alle Komponenten (Sidebar, Banner, Modals) die Änderung sehen.
@@ -258,11 +303,39 @@ function App(){
   function renameTeam(id, name){
     const team = window.ESG_DATA.TEAMS.find(x=>x.id===id);
     if(!team || !name.trim()) return;
+    const prev = team.name;
     team.name = name.trim();
     setTeamsRev(r=>r+1);
     if(window.ESG_API.hasSession()){
-      window.ESG_API.updateTeam(id,{name:team.name}).catch(()=>{});
+      window.ESG_API.updateTeam(id,{name:team.name}).catch(err=>{
+        team.name = prev;
+        setTeamsRev(r=>r+1);
+        addToast({title:"Fehler",body:err.error||"Name konnte nicht gespeichert werden."});
+      });
     }
+  }
+  function updateTeamProp(id, patch){
+    const team = window.ESG_DATA.TEAMS.find(x=>x.id===id);
+    if(!team) return;
+    const prev = {...team};
+    Object.assign(team, patch);
+    setTeamsRev(r=>r+1);
+    if(window.ESG_API.hasSession()){
+      window.ESG_API.updateTeam(id, patch).catch(err=>{
+        Object.assign(team, prev);
+        setTeamsRev(r=>r+1);
+        addToast({title:"Fehler",body:err.error||"Bereich konnte nicht gespeichert werden."});
+      });
+    }
+  }
+  function reorderTeams(fromId, toId){
+    const arr = window.ESG_DATA.TEAMS;
+    const si = arr.findIndex(t=>t.id===fromId);
+    const ti = arr.findIndex(t=>t.id===toId);
+    if(si<0||ti<0||si===ti) return;
+    const [item] = arr.splice(si,1);
+    arr.splice(ti,0,item);
+    setTeamsRev(r=>r+1);
   }
   function deleteTeam(id){
     const arr = window.ESG_DATA.TEAMS;
@@ -279,16 +352,36 @@ function App(){
       window.ESG_API.deleteTeam(id).catch(()=>{});
     }
   }
-  function createTeam(name){
+  function createTeam(name, color="#6178FE", icon="📁"){
     if(!name.trim()) return;
     const arr = window.ESG_DATA.TEAMS;
-    const id = Math.max(0,...arr.map(t=>t.id))+1;
-    arr.push({id, name:name.trim(), icon:"📁", color:"#6178FE", members:[ME.id]});
-    setTeamsRev(r=>r+1);
     if(window.ESG_API.hasSession()){
-      window.ESG_API.createTeam(name.trim()).catch(()=>{});
+      window.ESG_API.createTeam(name.trim(), color, icon)
+        .then(saved=>{
+          arr.push(saved);
+          setTeamsRev(r=>r+1);
+          addToast({title:"Bereich erstellt",body:`<b>${saved.name}</b> wurde angelegt.`,icon:"checkCircle",color:"var(--st-done-bg)",iconColor:"var(--st-done)"});
+        })
+        .catch(err=>addToast({title:"Fehler",body:err.error||"Bereich konnte nicht erstellt werden."}));
+    } else {
+      const id = Math.max(0,...arr.map(t=>t.id))+1;
+      arr.push({id, name:name.trim(), icon, color, members:[ME.id]});
+      setTeamsRev(r=>r+1);
     }
   }
+
+  // ⌘K → Fokus auf Suche
+  useEffect(()=>{
+    function hk(e){
+      if((e.metaKey||e.ctrlKey) && e.key==="k"){
+        e.preventDefault();
+        const inp = document.querySelector(".search input");
+        if(inp){ inp.focus(); inp.select(); }
+      }
+    }
+    window.addEventListener("keydown",hk);
+    return ()=>window.removeEventListener("keydown",hk);
+  },[]);
 
   // Service Worker einmalig registrieren
   useEffect(()=>{ registerServiceWorker(); },[]);
@@ -348,15 +441,32 @@ function App(){
     }
   },[screen]);
 
-  // Echte Aufgaben + Notizen vom PHP-Backend laden (Demo-Modus behält Mock-Daten)
+  // Echte Aufgaben + Notizen + Benachrichtigungen vom PHP-Backend laden
   useEffect(()=>{
     if(screen!=="app" || !window.ESG_API.hasSession()) return;
-    Promise.all([window.ESG_API.getTasks(), window.ESG_API.getNotes()])
-      .then(([t,n])=>{ setTasks(t); setNotes(n); })
-      .catch(err=>{
-        console.warn("Backend nicht erreichbar, Mock-Daten bleiben aktiv:", err);
-        addToast({title:"Offline",body:"Backend nicht erreichbar — Demo-Daten werden angezeigt."});
-      });
+    setLoadingTasks(true);
+    Promise.all([
+      window.ESG_API.getTasks(),
+      window.ESG_API.getNotes(),
+      window.ESG_API.getNotifications().catch(()=>[]),
+      window.ESG_API.getTeams().catch(()=>[]),
+    ]).then(([t,n,nf,tms])=>{
+      setTasks(t);
+      setNotes(n);
+      if(nf.length>0) setNotifs(nf);
+      if(tms.length>0){
+        // Merge real teams into the module-level TEAMS array (keep id=0 "Alle")
+        const arr = window.ESG_DATA.TEAMS;
+        const base = arr.find(x=>x.id===0);
+        arr.length = 0;
+        if(base) arr.push(base);
+        tms.forEach(rt=>arr.push(rt));
+        setTeamsRev(r=>r+1);
+      }
+    }).catch(err=>{
+      console.warn("Backend nicht erreichbar, Mock-Daten bleiben aktiv:", err);
+      addToast({title:"Offline",body:"Backend nicht erreichbar — Demo-Daten werden angezeigt."});
+    }).finally(()=>setLoadingTasks(false));
   },[screen]);
 
   // Echtzeit: WebSocket-Verbindung zum PHP-WS-Server (ws://localhost:8090)
@@ -458,7 +568,9 @@ function App(){
         section, setSection,
         open:sidebarOpen, onClose:()=>setSidebarOpen(false),
         onNewTask:()=>setShowNewTask(true),
-        onRenameTeam:renameTeam, onDeleteTeam:deleteTeam, onCreateTeam:createTeam
+        onRenameTeam:renameTeam, onDeleteTeam:deleteTeam, onCreateTeam:(name,color,icon)=>createTeam(name,color,icon),
+        onUpdateTeam:updateTeamProp, onReorderTeams:reorderTeams,
+        onNewTaskInTeam:(teamId)=>{ setActiveTeam(teamId); setSection("tasks"); setShowNewTask(true); }
       }),
 
       h("div",{className:"main"},
@@ -488,7 +600,9 @@ function App(){
               : h(Fragment,null,
                   h(Subbar,{filters,setFilters,view,setView}),
                   view==="list"
-                    ? h(ListView,{tasks:visibleTasks,onOpen:setOpenTask,onToggleDone:toggleDone,searchVal,filters})
+                    ? h(ListView,{tasks:visibleTasks,onOpen:setOpenTask,onToggleDone:toggleDone,searchVal,filters,loading:loadingTasks})
+                    : view==="calendar"
+                    ? h(CalendarView,{tasks:visibleTasks,onOpen:setOpenTask})
                     : h(BoardView,{tasks:visibleTasks,onOpen:setOpenTask,onNewTask:()=>setShowNewTask(true)})
                 )
           )
@@ -502,13 +616,16 @@ function App(){
     ),
 
     // Drawer
-    openTask && h(TaskDrawer,{
-      task:openTask,
-      onClose:()=>setOpenTask(null),
-      onToggleDone:toggleDone,
-      onShare:()=>{ setShareTask(openTask); setOpenTask(null); },
-      onChange:()=>{}
-    }),
+    openTask && h(ErrorBoundary,null,
+      h(TaskDrawer,{
+        task:openTask,
+        onClose:()=>setOpenTask(null),
+        onToggleDone:toggleDone,
+        onShare:()=>{ setShareTask(openTask); setOpenTask(null); },
+        onSave:updateTask,
+        onDelete:deleteTask,
+      })
+    ),
 
     // Share modal
     shareTask && h(ShareModal,{task:shareTask,onClose:()=>setShareTask(null)}),
@@ -559,5 +676,5 @@ function App(){
 
 window.App = App;
 window._addToast = ()=>_addToast;
-ReactDOM.createRoot(document.getElementById("root")).render(h(App));
+ReactDOM.createRoot(document.getElementById("root")).render(h(ErrorBoundary,null,h(App)));
 })();

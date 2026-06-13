@@ -241,6 +241,7 @@ function mapTask(t){
     teamId:    t.team_id != null ? Number(t.team_id) : null,
     assignees: (t.assignees || []).map(Number),
     due:       t.due_date ? String(t.due_date).slice(0,10) : null,
+    remindAt:  t.remind_at ? String(t.remind_at).slice(0,16).replace(" ","T") : null,
     createdBy: Number(t.created_by),
     createdAt: t.created_at,
     comments:  t.comments != null ? Number(t.comments) : 0,
@@ -262,9 +263,77 @@ function mapNote(n){
   };
 }
 
+function mapComment(c){
+  return {
+    id:       Number(c.id),
+    user:     Number(c.user_id),
+    text:     c.content || c.text || "",
+    ts:       c.created_at || c.ts,
+    userName: c.user_name || "",
+  };
+}
+
+function mapAttachment(a){
+  return {
+    id:           Number(a.id),
+    filename:     a.filename,
+    originalName: a.original_name,
+    mimeType:     a.mime_type,
+    size:         Number(a.size),
+    uploadedBy:   Number(a.uploaded_by),
+    uploaderName: a.uploader_name || "",
+    createdAt:    a.created_at,
+  };
+}
+
+function mapNotification(n){
+  return {
+    id:        String(n.id),
+    type:      n.type,
+    read:      Boolean(Number(n.is_read)),
+    actor:     n.actor_id != null ? Number(n.actor_id) : null,
+    taskId:    n.task_id  != null ? Number(n.task_id)  : null,
+    text:      n.text,
+    ts:        n.created_at,
+    actorName: n.actor_name || "",
+  };
+}
+
+/* Multipart upload — sin Content-Type header (browser lo pone con boundary) */
+async function apiUpload(path, formData){
+  const headers = {};
+  if(accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  let res = await fetch(API_BASE_URL + path, {method:"POST", headers, body:formData});
+  if(res.status===401 && refreshToken){
+    const r = await fetch(API_BASE_URL+"/api/auth/refresh",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({refreshToken})});
+    if(r.ok){ setTokens(await r.json()); headers.Authorization = `Bearer ${accessToken}`; res = await fetch(API_BASE_URL+path,{method:"POST",headers,body:formData}); }
+    else{ clearTokens(); throw new Error("Sitzung abgelaufen."); }
+  }
+  if(!res.ok) throw await res.json().catch(()=>({error:res.statusText}));
+  return res.json();
+}
+
+async function apiBlob(path){
+  const headers = accessToken ? {Authorization:`Bearer ${accessToken}`} : {};
+  const res = await fetch(API_BASE_URL + path, {headers});
+  if(!res.ok) throw new Error("Download fehlgeschlagen");
+  return res.blob();
+}
+
+function mapTeam(t){
+  return {
+    id:      Number(t.id),
+    name:    t.name,
+    icon:    t.icon  || "📁",
+    color:   t.color || "#6178FE",
+    ownerId: Number(t.owner_id),
+    members: (t.members || []).map(Number),
+  };
+}
+
 const ESG_API = {
   BASE: API_BASE_URL,
-  hasSession, setTokens, clearTokens, mapTask, mapNote, fetch: apiFetch,
+  hasSession, setTokens, clearTokens, mapTask, mapNote, mapComment, mapAttachment, mapNotification, mapTeam, fetch: apiFetch,
 
   // --- Auth ---------------------------------------------------------------
   async register(name, email, password){
@@ -296,10 +365,11 @@ const ESG_API = {
     const {tasks} = await apiFetch("/api/tasks" + (q ? `?${q}` : ""));
     return tasks.map(mapTask);
   },
-  async createTask({title, desc, status, priority, due, teamId, assignees}){
+  async createTask({title, desc, status, priority, due, remindAt, teamId, assignees}){
     const {task} = await apiFetch("/api/tasks", {method:"POST", body:JSON.stringify({
-      title, description:desc, status, priority, dueDate:due,
-      teamId: typeof teamId==="number" ? teamId : null, // Sidebar-Filter ("all"/"mine") ist kein Team
+      title, description:desc, status, priority,
+      dueDate:due, remindAt: remindAt||null,
+      teamId: typeof teamId==="number" ? teamId : null,
       assignees,
     })});
     return mapTask(task);
@@ -311,6 +381,7 @@ const ESG_API = {
     if("status"   in patch) body.status      = patch.status;
     if("priority" in patch) body.priority    = patch.priority;
     if("due"      in patch) body.dueDate     = patch.due;
+    if("remindAt" in patch) body.remindAt    = patch.remindAt;
     if("teamId"   in patch) body.teamId      = patch.teamId;
     if("assignees"in patch) body.assignees   = patch.assignees;
     const {task} = await apiFetch(`/api/tasks/${id}`, {method:"PATCH", body:JSON.stringify(body)});
@@ -344,14 +415,59 @@ const ESG_API = {
   deleteNote: (id) => apiFetch(`/api/notes/${id}`, {method:"DELETE"}),
 
   // --- Kommentare ---------------------------------------------------------------
-  getComments:   (taskId)       => apiFetch(`/api/tasks/${taskId}/comments`),
-  addComment:    (taskId, text) => apiFetch(`/api/tasks/${taskId}/comments`, {method:"POST", body:JSON.stringify({text})}),
-  deleteComment: (taskId, id)   => apiFetch(`/api/tasks/${taskId}/comments/${id}`, {method:"DELETE"}),
+  async getComments(taskId){
+    const {comments} = await apiFetch(`/api/tasks/${taskId}/comments`);
+    return (comments||[]).map(mapComment);
+  },
+  async addComment(taskId, text){
+    const {comment} = await apiFetch(`/api/tasks/${taskId}/comments`, {method:"POST", body:JSON.stringify({content:text})});
+    return mapComment({...comment, user_id:comment.user_id||comment.userId});
+  },
+  deleteComment: (taskId, id) => apiFetch(`/api/tasks/${taskId}/comments/${id}`, {method:"DELETE"}),
+
+  // --- Anhänge (Attachments) ---------------------------------------------------
+  async getAttachments(taskId){
+    const {attachments} = await apiFetch(`/api/tasks/${taskId}/attachments`);
+    return (attachments||[]).map(mapAttachment);
+  },
+  async uploadAttachment(taskId, file){
+    const fd = new FormData();
+    fd.append("file", file);
+    const {attachment} = await apiUpload(`/api/tasks/${taskId}/attachments`, fd);
+    return mapAttachment(attachment);
+  },
+  deleteAttachment: (taskId, attachId) => apiFetch(`/api/tasks/${taskId}/attachments/${attachId}`, {method:"DELETE"}),
+  async downloadAttachment(taskId, attachId, originalName){
+    const blob = await apiBlob(`/api/tasks/${taskId}/attachments/${attachId}/download`);
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = originalName || "download";
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 5000);
+  },
+
+  // --- Benachrichtigungen ------------------------------------------------------
+  async getNotifications(){
+    const {notifications} = await apiFetch("/api/notifications");
+    return (notifications||[]).map(mapNotification);
+  },
+  markNotifRead:    (id) => apiFetch(`/api/notifications/${id}`, {method:"PATCH"}),
+  markAllNotifsRead: ()  => apiFetch("/api/notifications/read-all", {method:"POST", body:"{}"}),
 
   // --- Teams / Share / Audit ------------------------------------------------------
-  createTeam: (name)        => apiFetch("/api/teams", {method:"POST", body:JSON.stringify({name})}),
+  async getTeams(){
+    const data = await apiFetch("/api/teams");
+    return (data.teams || []).map(mapTeam);
+  },
+  async createTeam(name, color="#6178FE", icon="📁"){
+    const data = await apiFetch("/api/teams", {method:"POST", body:JSON.stringify({name, color, icon})});
+    return mapTeam(data.team);
+  },
   getTeam:    (id)          => apiFetch(`/api/teams/${id}`),
-  updateTeam: (id, data)    => apiFetch(`/api/teams/${id}`, {method:"PATCH", body:JSON.stringify(data)}),
+  async updateTeam(id, patch){
+    const data = await apiFetch(`/api/teams/${id}`, {method:"PATCH", body:JSON.stringify(patch)});
+    return mapTeam(data.team);
+  },
   deleteTeam: (id)          => apiFetch(`/api/teams/${id}`, {method:"DELETE"}),
   invite:     (id, email)   => apiFetch(`/api/teams/${id}/invite`, {method:"POST", body:JSON.stringify({email})}),
   share:      (taskId, opt) => apiFetch(`/api/tasks/${taskId}/share`, {method:"POST", body:JSON.stringify(opt||{})}),

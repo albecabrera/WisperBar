@@ -2,27 +2,151 @@
 //  ToDo-Schule — Sidebar + Topbar
 // ========================================================================
 (function(){
-const {useState,useRef,useEffect} = React;
-const {createElement:h} = React;
+const {useState,useRef,useEffect,useCallback} = React;
+const {createElement:h,Fragment} = React;
 const {USERS, ME, TEAMS, TASKS, NOTIFICATIONS} = window.ESG_DATA;
 
-function Sidebar({activeTeam, setActiveTeam, section, setSection, open, onClose, onNewTask, onRenameTeam, onDeleteTeam, onCreateTeam}){
-  const [ctxMenu, setCtxMenu]   = useState(null); // {x,y,team}
-  const [renaming, setRenaming] = useState(null); // teamId
+const COLOR_SWATCHES = ["#6178FE","#E8416F","#22C55E","#F59E0B","#06B6D4","#A855F7","#EF4444","#64748B","#0EA5E9","#10B981","#F97316","#8B5CF6"];
+const ICON_OPTIONS   = ["📁","📚","🎓","🖥️","🔬","🎨","⚙️","📋","🏫","🎵","📐","🌍","💡","🧪","📊","🗂️","🎯","🔧"];
+
+/* ── Team action popup ───────────────────────────────────────────────── */
+function TeamPopup({team, onClose, onRename, onDelete, onUpdate, onNewTask, onInvite}){
+  const [mode, setMode]       = useState("main"); // main | edit | invite
+  const [editName, setEditName] = useState(team.name);
+  const [editColor, setEditColor] = useState(team.color||"#6178FE");
+  const [editIcon, setEditIcon]  = useState(team.icon||"📁");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const ref = useRef();
+
+  useEffect(()=>{
+    function hd(e){
+      if(ref.current && !ref.current.contains(e.target)) onClose();
+    }
+    setTimeout(()=>document.addEventListener("mousedown",hd),0);
+    return ()=>document.removeEventListener("mousedown",hd);
+  },[]);
+
+  function saveEdit(){
+    const patch = {};
+    if(editName.trim() && editName.trim()!==team.name) patch.name = editName.trim();
+    if(editColor!==team.color) patch.color = editColor;
+    if(editIcon!==team.icon)   patch.icon  = editIcon;
+    if(Object.keys(patch).length) onUpdate(team.id, patch);
+    onClose();
+  }
+
+  async function doInvite(){
+    if(!inviteEmail.trim()) return;
+    setInviting(true);
+    try{
+      if(window.ESG_API.hasSession()) await window.ESG_API.invite(team.id, inviteEmail.trim());
+      onInvite && onInvite(team.id, inviteEmail.trim());
+    }catch(e){ alert(e.error||"Einladung fehlgeschlagen."); }
+    finally{ setInviting(false); onClose(); }
+  }
+
+  if(mode==="main") return h("div",{ref,className:"team-popup"},
+    h("div",{className:"tp-header"},
+      h("span",{className:"tp-icon"},team.icon),
+      h("div",null,
+        h("div",{className:"tp-name"},team.name),
+        h("div",{className:"tp-sub"},`${TASKS.filter(t=>t.teamId===team.id&&t.status!=="done").length} offen`)
+      )
+    ),
+    h("div",{className:"tp-sep"}),
+    h("button",{className:"tp-item",onClick:()=>{onNewTask(team.id);onClose();}},
+      h(Icon,{n:"plus",size:14}), "Neue Aufgabe"
+    ),
+    h("button",{className:"tp-item",onClick:()=>{ setMode("edit"); }},
+      h(Icon,{n:"edit",size:14}), "Umbenennen"
+    ),
+    h("button",{className:"tp-item",onClick:()=>setMode("edit")},
+      h(Icon,{n:"palette",size:14}), "Farbe & Icon"
+    ),
+    h("button",{className:"tp-item",onClick:()=>setMode("invite")},
+      h(Icon,{n:"userPlus",size:14}), "Mitglied einladen"
+    ),
+    h("div",{className:"tp-sep"}),
+    h("button",{className:"tp-item danger",onClick:()=>{
+      onClose();
+      if(window.confirm(`Bereich „${team.name}" wirklich löschen?\nAufgaben und Notizen bleiben erhalten.`)) onDelete(team.id);
+    }},
+      h(Icon,{n:"trash",size:14}), "Löschen"
+    )
+  );
+
+  if(mode==="edit") return h("div",{ref,className:"team-popup team-popup-edit"},
+    h("div",{className:"tp-edit-label"},"Name"),
+    h("input",{className:"sb-rename",value:editName,autoFocus:true,
+      onChange:e=>setEditName(e.target.value),
+      onKeyDown:e=>{ if(e.key==="Enter") saveEdit(); if(e.key==="Escape") onClose(); }
+    }),
+    h("div",{className:"tp-edit-label",style:{marginTop:10}},"Farbe"),
+    h("div",{className:"sb-swatches",style:{flexWrap:"wrap",gap:6}},
+      COLOR_SWATCHES.map(c=>h("button",{key:c,className:`sb-swatch ${editColor===c?"on":""}`,
+        style:{background:c,width:22,height:22},onClick:()=>setEditColor(c)}))
+    ),
+    h("div",{className:"tp-edit-label",style:{marginTop:10}},"Icon"),
+    h("div",{className:"sb-icons",style:{flexWrap:"wrap"}},
+      ICON_OPTIONS.map(ic=>h("button",{key:ic,className:`sb-icoopt ${editIcon===ic?"on":""}`,
+        onClick:()=>setEditIcon(ic)},ic))
+    ),
+    h("div",{className:"row gap-8",style:{marginTop:10}},
+      h("button",{className:"btn btn-primary btn-sm",style:{flex:1},onClick:saveEdit},"Speichern"),
+      h("button",{className:"btn btn-ghost btn-sm",onClick:()=>setMode("main")},"Zurück")
+    )
+  );
+
+  if(mode==="invite") return h("div",{ref,className:"team-popup"},
+    h("div",{className:"tp-header"},
+      h(Icon,{n:"userPlus",size:15,style:{color:"var(--accent)"}}),
+      h("div",{className:"tp-name"},`Zu „${team.name}" einladen`)
+    ),
+    h("div",{style:{padding:"6px 0 4px"}},
+      h("input",{className:"input btn-sm",placeholder:"E-Mail-Adresse…",value:inviteEmail,autoFocus:true,
+        onChange:e=>setInviteEmail(e.target.value),
+        onKeyDown:e=>{ if(e.key==="Enter") doInvite(); if(e.key==="Escape") onClose(); }
+      })
+    ),
+    h("div",{className:"row gap-8",style:{marginTop:8}},
+      h("button",{className:"btn btn-primary btn-sm",style:{flex:1},onClick:doInvite,disabled:inviting||!inviteEmail.trim()},
+        inviting?"Senden…":"Einladen"
+      ),
+      h("button",{className:"btn btn-ghost btn-sm",onClick:()=>setMode("main")},"Zurück")
+    )
+  );
+
+  return null;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────── */
+function Sidebar({
+  activeTeam, setActiveTeam, section, setSection, open, onClose,
+  onNewTask, onRenameTeam, onDeleteTeam, onCreateTeam,
+  onUpdateTeam, onReorderTeams, onNewTaskInTeam
+}){
+  const [renaming, setRenaming] = useState(null);
   const [tmpName, setTmpName]   = useState("");
   const [creating, setCreating] = useState(false);
+  const [newColor, setNewColor] = useState("#6178FE");
+  const [newIcon, setNewIcon]   = useState("📁");
+  const [openMenu, setOpenMenu] = useState(null); // teamId or null
 
-  // Kontextmenü bei Klick irgendwo schließen
+  // Drag & drop
+  const dragSrc  = useRef(null);
+  const [dragOver, setDragOver] = useState(null);
+
+  // Close popup on Escape
   useEffect(()=>{
-    if(!ctxMenu) return;
-    const close = ()=>setCtxMenu(null);
-    window.addEventListener("click", close);
-    window.addEventListener("contextmenu", close);
-    return ()=>{ window.removeEventListener("click", close); window.removeEventListener("contextmenu", close); };
-  },[ctxMenu]);
+    if(!openMenu) return;
+    function hk(e){ if(e.key==="Escape") setOpenMenu(null); }
+    window.addEventListener("keydown",hk);
+    return ()=>window.removeEventListener("keydown",hk);
+  },[openMenu]);
 
   function startRename(team){
-    setCtxMenu(null);
+    setOpenMenu(null);
     setRenaming(team.id);
     setTmpName(team.name);
   }
@@ -31,17 +155,45 @@ function Sidebar({activeTeam, setActiveTeam, section, setSection, open, onClose,
     setRenaming(null);
   }
   function commitCreate(){
-    if(tmpName.trim()) onCreateTeam(tmpName);
+    if(tmpName.trim()) onCreateTeam(tmpName, newColor, newIcon);
     setCreating(false);
     setTmpName("");
+    setNewColor("#6178FE");
+    setNewIcon("📁");
   }
+
+  // DnD handlers — only for TEAMS rows
+  function handleDragStart(e, teamId){
+    dragSrc.current = teamId;
+    e.dataTransfer.effectAllowed = "move";
+    e.currentTarget.classList.add("dragging");
+  }
+  function handleDragEnd(e){
+    e.currentTarget.classList.remove("dragging");
+    setDragOver(null);
+  }
+  function handleDragOver(e, teamId){
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if(dragSrc.current && teamId !== dragSrc.current) setDragOver(teamId);
+  }
+  function handleDragLeave(){
+    setDragOver(null);
+  }
+  function handleDrop(e, targetId){
+    e.preventDefault();
+    const srcId = dragSrc.current;
+    dragSrc.current = null;
+    setDragOver(null);
+    if(srcId && srcId!==targetId) onReorderTeams(srcId, targetId);
+  }
+
   const navItems = [
     {id:"all",   icon:"inbox",    label:"Alle Aufgaben",   count: TASKS.filter(t=>t.status!=="done").length},
     {id:"mine",  icon:"user",     label:"Mir zugewiesen",  count: TASKS.filter(t=>t.assignees.includes(ME.id)&&t.status!=="done").length},
-    {id:"today", icon:"star",     label:"Heute fällig",    count: TASKS.filter(t=>t.due==="2026-06-12"&&t.status!=="done").length},
+    {id:"today", icon:"star",     label:"Heute fällig",    count: TASKS.filter(t=>t.due==="2026-06-13"&&t.status!=="done").length},
     {id:"done",  icon:"checkCircle",label:"Erledigt",      count: TASKS.filter(t=>t.status==="done").length},
   ];
-  const onlineCount = USERS.filter(u=>u.presence==="online").length;
 
   return h("aside",{className:`sidebar ${open?"open":""}`, id:"sidebar"},
     h("div",{className:"sb-brand"},
@@ -64,7 +216,7 @@ function Sidebar({activeTeam, setActiveTeam, section, setSection, open, onClose,
     ),
 
     h("div",{className:"sb-scroll"},
-      // nav
+      // Nav
       navItems.map(it => h("button",{
         key:it.id, className:`navitem ${section==="tasks"&&activeTeam===it.id?"on":""}`,
         onClick:()=>{ setActiveTeam(it.id); onClose(); }
@@ -83,48 +235,95 @@ function Sidebar({activeTeam, setActiveTeam, section, setSection, open, onClose,
         h("span",{className:"grow"},"Notizen & Planungen")
       ),
 
+      /* Bereiche header */
       h("div",{className:"sb-label"},
         h("span",null,"Bereiche"),
-        h("button",{title:"Bereich erstellen",onClick:()=>{ setCreating(true); setTmpName(""); }},
+        h("button",{title:"Bereich erstellen",onClick:()=>{ setCreating(true); setTmpName(""); setOpenMenu(null); }},
           h(Icon,{n:"plus",size:13}))
       ),
 
+      /* Team rows with DnD + three-dot menu */
       TEAMS.filter(t=>t.id!==0).map(team => {
         const cnt = TASKS.filter(t=>t.teamId===team.id&&t.status!=="done").length;
-        // Inline-Umbenennen (Rechtsklick -> Umbenennen, oder Kontextmenü)
+        const isOver   = dragOver===team.id;
+        const isActive = section==="tasks" && activeTeam===team.id;
+
         if(renaming===team.id){
           return h("div",{key:team.id,className:"navitem on",style:{cursor:"default"}},
             h(TagDot,{color:team.color,size:10}),
             h("input",{className:"sb-rename",value:tmpName,autoFocus:true,
               onChange:e=>setTmpName(e.target.value),
               onBlur:commitRename,
-              onKeyDown:e=>{
-                if(e.key==="Enter") commitRename();
-                if(e.key==="Escape") setRenaming(null);
-              }})
+              onKeyDown:e=>{ if(e.key==="Enter") commitRename(); if(e.key==="Escape") setRenaming(null); }
+            })
           );
         }
-        return h("button",{
-          key:team.id, className:`navitem ${section==="tasks"&&activeTeam===team.id?"on":""}`,
-          onClick:()=>{ setActiveTeam(team.id); onClose(); },
-          onContextMenu:e=>{ e.preventDefault(); e.stopPropagation(); setCtxMenu({x:e.clientX,y:e.clientY,team}); }
+
+        return h("div",{
+          key:team.id,
+          className:`team-row ${isActive?"active":""} ${isOver?"drag-over":""}`,
+          draggable:true,
+          onDragStart:e=>handleDragStart(e,team.id),
+          onDragEnd:handleDragEnd,
+          onDragOver:e=>handleDragOver(e,team.id),
+          onDragLeave:handleDragLeave,
+          onDrop:e=>handleDrop(e,team.id),
         },
-          h(TagDot,{color:team.color,size:10}),
-          h("span",{className:"grow",style:{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}, team.name),
-          cnt > 0 && h("span",{className:"ct"},cnt)
+          /* grip handle */
+          h("span",{className:"team-grip","aria-hidden":"true"},
+            h(Icon,{n:"grip",size:13,strokeWidth:2})
+          ),
+          /* main clickable area */
+          h("div",{className:"team-row-body",onClick:()=>{ setActiveTeam(team.id); setOpenMenu(null); onClose(); }},
+            h("span",{className:"team-row-icon"},team.icon),
+            h("span",{className:"team-row-name"},team.name),
+            cnt > 0 && h("span",{className:"ct"},cnt)
+          ),
+          /* three-dot button */
+          h("button",{
+            className:"team-more",
+            title:"Optionen",
+            onClick:e=>{ e.stopPropagation(); setOpenMenu(openMenu===team.id?null:team.id); }
+          }, h(Icon,{n:"moreV",size:14})),
+
+          /* popup menu */
+          openMenu===team.id && h(TeamPopup,{
+            team,
+            onClose:()=>setOpenMenu(null),
+            onRename:startRename,
+            onDelete:onDeleteTeam,
+            onUpdate:onUpdateTeam,
+            onNewTask:onNewTaskInTeam,
+            onInvite:()=>{}
+          })
         );
       }),
 
-      // Neuen Bereich anlegen (über das +)
-      creating && h("div",{className:"navitem on",style:{cursor:"default"}},
-        h(TagDot,{color:"#6178FE",size:10}),
-        h("input",{className:"sb-rename",value:tmpName,autoFocus:true,placeholder:"Name des Bereichs…",
-          onChange:e=>setTmpName(e.target.value),
-          onBlur:commitCreate,
-          onKeyDown:e=>{
-            if(e.key==="Enter") commitCreate();
-            if(e.key==="Escape"){ setCreating(false); setTmpName(""); }
-          }})
+      /* Create new Bereich */
+      creating && h("div",{className:"team-creator"},
+        h("div",{className:"row gap-8",style:{marginBottom:7}},
+          h("span",{className:"sb-icon-pick"},newIcon),
+          h("input",{className:"sb-rename",value:tmpName,autoFocus:true,placeholder:"Name des Bereichs…",
+            onChange:e=>setTmpName(e.target.value),
+            onKeyDown:e=>{
+              if(e.key==="Enter") commitCreate();
+              if(e.key==="Escape"){ setCreating(false); setTmpName(""); }
+            }})
+        ),
+        h("div",{className:"tp-edit-label"},"Farbe"),
+        h("div",{className:"sb-swatches",style:{flexWrap:"wrap",gap:6}},
+          COLOR_SWATCHES.map(c=>h("button",{key:c,className:`sb-swatch ${newColor===c?"on":""}`,
+            style:{background:c,width:22,height:22},onClick:()=>setNewColor(c)}))
+        ),
+        h("div",{className:"tp-edit-label",style:{marginTop:8}},"Icon"),
+        h("div",{className:"sb-icons",style:{flexWrap:"wrap"}},
+          ICON_OPTIONS.map(ic=>h("button",{key:ic,className:`sb-icoopt ${newIcon===ic?"on":""}`,
+            onClick:()=>setNewIcon(ic)},ic))
+        ),
+        h("div",{className:"row gap-8",style:{marginTop:9}},
+          h("button",{className:"btn btn-primary btn-sm",style:{flex:1},onClick:commitCreate},"Erstellen"),
+          h("button",{className:"btn btn-ghost btn-sm",onClick:()=>{ setCreating(false); setTmpName(""); }},"Abbrechen")
+        )
       ),
 
       h("div",{className:"sb-label"},"Online"),
@@ -153,22 +352,11 @@ function Sidebar({activeTeam, setActiveTeam, section, setSection, open, onClose,
         ),
         h("span",{className:"cog"},h(Icon,{n:"settings",size:15}))
       )
-    ),
-
-    // Kontextmenü für Bereiche (Rechtsklick)
-    ctxMenu && h("div",{className:"ctx-menu",style:{left:ctxMenu.x,top:ctxMenu.y}},
-      h("button",{onClick:()=>startRename(ctxMenu.team)},
-        h(Icon,{n:"edit",size:14}),"Umbenennen"),
-      h("button",{className:"danger",onClick:()=>{
-        const t = ctxMenu.team;
-        setCtxMenu(null);
-        if(window.confirm(`Bereich „${t.name}" wirklich löschen?\nAufgaben und Notizen bleiben erhalten.`)) onDeleteTeam(t.id);
-      }},
-        h(Icon,{n:"trash",size:14}),"Löschen")
     )
   );
 }
 
+/* ── Topbar ──────────────────────────────────────────────────────────── */
 function Topbar({activeTeam, section, view, setView, notifCount, onBell, onMenuOpen, searchVal, setSearchVal, presenceUsers, theme, onToggleTheme, onQuickNote}){
   const isNotes = section === "notes";
   const team = !isNotes && typeof activeTeam === "number"
@@ -194,7 +382,6 @@ function Topbar({activeTeam, section, view, setView, notifCount, onBell, onMenuO
 
     h("div",{className:"sp"}),
 
-    // live presence cluster
     presenceUsers.length > 0 && h("div",{className:"presence"},
       h("span",{className:"live-dot"}),
       h(AvatarStack,{userIds:presenceUsers.slice(0,4),size:"xs"}),
@@ -202,7 +389,6 @@ function Topbar({activeTeam, section, view, setView, notifCount, onBell, onMenuO
     ),
 
     h("div",{className:"topbar-tools"},
-      // Roter Bugs-Button: minimalistisches Checklist-Popup
       h("button",{className:"btn btn-news",onClick:onQuickNote,title:"Bugs notieren"},
         h(Icon,{n:"alertCircle",size:15}), "Bugs"
       ),
@@ -218,10 +404,12 @@ function Topbar({activeTeam, section, view, setView, notifCount, onBell, onMenuO
         ),
         h("button",{className:view==="board"?"on":"",onClick:()=>setView("board"),title:"Board"},
           h(Icon,{n:"layout",size:15}), "Board"
+        ),
+        h("button",{className:view==="calendar"?"on":"",onClick:()=>setView("calendar"),title:"Kalender"},
+          h(Icon,{n:"calendar",size:15}), "Kalender"
         )
       ),
 
-      // Hell-/Dunkelmodus
       h("button",{className:"iconbtn",onClick:onToggleTheme,"aria-label":"Theme wechseln",
         title:theme==="dark"?"Heller Modus":"Dunkler Modus"},
         h(Icon,{n:theme==="dark"?"sun":"moon",size:18})
