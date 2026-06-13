@@ -24,6 +24,25 @@ final class User extends Model
         return self::find((int) self::db()->lastInsertId());
     }
 
+    /** Alle Nutzer, die mindestens ein gemeinsames Team mit $userId haben (inkl. sich selbst). */
+    public static function colleagues(int $userId): array
+    {
+        $stmt = self::db()->prepare(
+            'SELECT DISTINCT ' . self::PUBLIC_COLS . '
+             FROM users u
+             WHERE u.id = :me
+                OR u.id IN (
+                    SELECT tm2.user_id
+                    FROM team_members tm1
+                    JOIN team_members tm2 ON tm2.team_id = tm1.team_id
+                    WHERE tm1.user_id = :me2 AND tm2.user_id <> :me3
+                )
+             ORDER BY u.name ASC'
+        );
+        $stmt->execute([':me' => $userId, ':me2' => $userId, ':me3' => $userId]);
+        return $stmt->fetchAll();
+    }
+
     public static function find(int $id): ?array
     {
         $stmt = self::db()->prepare('SELECT ' . self::PUBLIC_COLS . ' FROM users WHERE id = :id');

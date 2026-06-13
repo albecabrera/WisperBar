@@ -320,6 +320,23 @@ async function apiBlob(path){
   return res.blob();
 }
 
+function mapUser(u){
+  const parts = (u.name||"").trim().split(/\s+/);
+  const initials = parts.map(w=>w[0]||"").slice(0,2).join("").toUpperCase();
+  const colors = ["#312F80","#3D7AD2","#54B948","#E08A2B","#FD5266","#5D44E0","#6178FE","#D67930","#E8416F","#06B6D4"];
+  const color = colors[Number(u.id) % colors.length];
+  return {
+    id:          Number(u.id),
+    name:        u.name || u.email,
+    initials,
+    color,
+    role:        u.abbreviation ? `Kürzel: ${u.abbreviation.toUpperCase()}` : "",
+    email:       u.email || "",
+    presence:    "online",
+    avatarUrl:   u.avatar_url || null,
+  };
+}
+
 function mapTeam(t){
   return {
     id:      Number(t.id),
@@ -328,12 +345,13 @@ function mapTeam(t){
     color:   t.color || "#6178FE",
     ownerId: Number(t.owner_id),
     members: (t.members || []).map(Number),
+    _real:   true,
   };
 }
 
 const ESG_API = {
   BASE: API_BASE_URL,
-  hasSession, setTokens, clearTokens, mapTask, mapNote, mapComment, mapAttachment, mapNotification, mapTeam, fetch: apiFetch,
+  hasSession, setTokens, clearTokens, mapTask, mapNote, mapComment, mapAttachment, mapNotification, mapTeam, mapUser, fetch: apiFetch,
 
   // --- Auth ---------------------------------------------------------------
   async register(name, email, password){
@@ -455,6 +473,10 @@ const ESG_API = {
   markAllNotifsRead: ()  => apiFetch("/api/notifications/read-all", {method:"POST", body:"{}"}),
 
   // --- Teams / Share / Audit ------------------------------------------------------
+  async getUsers(){
+    const data = await apiFetch("/api/users");
+    return (data.users || []).map(mapUser);
+  },
   async getTeams(){
     const data = await apiFetch("/api/teams");
     return (data.teams || []).map(mapTeam);

@@ -326,16 +326,18 @@ function Sidebar({
         )
       ),
 
-      h("div",{className:"sb-label"},"Online"),
+      h("div",{className:"sb-label"},"Kollegium"),
       h("div",{style:{padding:"4px 6px",display:"flex",flexDirection:"column",gap:4}},
-        USERS.filter(u=>u.presence!=="offline").map(u =>
+        USERS.map(u =>
           h("div",{key:u.id,className:"row gap-8",style:{padding:"3px 4px"}},
             h(Avatar,{userId:u.id,size:"xs",showPresence:true}),
             h("div",null,
-              h("div",{style:{fontSize:13,fontWeight:550,lineHeight:1.1}},u.name),
+              h("div",{style:{fontSize:13,fontWeight:550,lineHeight:1.1}},
+                u.name, u.id===ME.id && h("span",{style:{fontSize:11,color:"var(--accent)",marginLeft:5,fontWeight:700}},"(ich)")
+              ),
               h("div",{style:{fontSize:11,color:"var(--text-3)",display:"flex",alignItems:"center",gap:4}},
-                h(PresenceDot,{status:u.presence}),
-                u.presence==="online"?"Online":"Abwesend"
+                h(PresenceDot,{status:u.presence||"online"}),
+                (u.presence||"online")==="online"?"Online":"Abwesend"
               )
             )
           )

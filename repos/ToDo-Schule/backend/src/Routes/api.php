@@ -34,8 +34,9 @@ return (static function (): Router {
     $r->post('/api/auth/logout',   [AuthController::class, 'logout']);
 
     // --- Profil ---------------------------------------------------------------
-    $r->get('/api/users/me',   [UserController::class, 'me'],       ['auth' => true]);
-    $r->patch('/api/users/me', [UserController::class, 'updateMe'], ['auth' => true]);
+    $r->get('/api/users',      [UserController::class, 'colleagues'], ['auth' => true]);
+    $r->get('/api/users/me',   [UserController::class, 'me'],         ['auth' => true]);
+    $r->patch('/api/users/me', [UserController::class, 'updateMe'],   ['auth' => true]);
 
     // --- Aufgaben -------------------------------------------------------------
     $r->get('/api/tasks',        [TaskController::class, 'index'],   ['auth' => true]);

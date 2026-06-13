@@ -21,6 +21,13 @@ final class UserController
         Response::json(['user' => $req->user]);
     }
 
+    /** GET /api/users — Kollegen (gemeinsame Teams) inkl. eigenem Eintrag. */
+    public static function colleagues(Request $req): void
+    {
+        $users = User::colleagues($req->userId());
+        Response::json(['users' => $users]);
+    }
+
     public static function updateMe(Request $req): void
     {
         $data = Validator::make($req->body, [

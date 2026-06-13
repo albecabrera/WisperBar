@@ -306,7 +306,7 @@ function App(){
     const prev = team.name;
     team.name = name.trim();
     setTeamsRev(r=>r+1);
-    if(window.ESG_API.hasSession()){
+    if(window.ESG_API.hasSession() && team._real){
       window.ESG_API.updateTeam(id,{name:team.name}).catch(err=>{
         team.name = prev;
         setTeamsRev(r=>r+1);
@@ -320,7 +320,7 @@ function App(){
     const prev = {...team};
     Object.assign(team, patch);
     setTeamsRev(r=>r+1);
-    if(window.ESG_API.hasSession()){
+    if(window.ESG_API.hasSession() && team._real){
       window.ESG_API.updateTeam(id, patch).catch(err=>{
         Object.assign(team, prev);
         setTeamsRev(r=>r+1);
@@ -405,7 +405,8 @@ function App(){
 
       // Eingeloggten Nutzer in ME übernehmen — Avatare zeigen die echten Initialen
       if(user && user.name){
-        ME.name = user.name;
+        ME.id    = Number(user.id);
+        ME.name  = user.name;
         ME.email = user.email || ME.email;
         ME.initials = user.name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
         if(user.abbreviation) ME.role = "Kürzel: " + user.abbreviation.toUpperCase();
@@ -450,17 +451,28 @@ function App(){
       window.ESG_API.getNotes(),
       window.ESG_API.getNotifications().catch(()=>[]),
       window.ESG_API.getTeams().catch(()=>[]),
-    ]).then(([t,n,nf,tms])=>{
+      window.ESG_API.getUsers().catch(()=>[]),
+      window.ESG_API.me().catch(()=>null),
+    ]).then(([t,n,nf,tms,usrs,meResp])=>{
       setTasks(t);
       setNotes(n);
       if(nf.length>0) setNotifs(nf);
       if(tms.length>0){
-        // Merge real teams into the module-level TEAMS array (keep id=0 "Alle")
         const arr = window.ESG_DATA.TEAMS;
         const base = arr.find(x=>x.id===0);
         arr.length = 0;
         if(base) arr.push(base);
         tms.forEach(rt=>arr.push(rt));
+        setTeamsRev(r=>r+1);
+      }
+      if(usrs.length>0){
+        const uArr = window.ESG_DATA.USERS;
+        uArr.length = 0;
+        usrs.forEach(u=>uArr.push(u));
+        // Use confirmed ME id from /api/users/me to avoid race with welcome effect
+        const realId = meResp?.user?.id ? Number(meResp.user.id) : window.ESG_DATA.ME.id;
+        const realMe = usrs.find(u=>u.id===realId);
+        if(realMe) Object.assign(window.ESG_DATA.ME, realMe);
         setTeamsRev(r=>r+1);
       }
     }).catch(err=>{
