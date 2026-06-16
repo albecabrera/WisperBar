@@ -17,6 +17,8 @@ from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
+from scipy.signal import resample_poly
+from math import gcd
 import pyperclip
 import rumps
 import mlx_whisper
@@ -539,12 +541,28 @@ class WisperBar(rumps.App):
             self._levels.append(scaled)
             self.title = self._waveform()
 
-        with sd.InputStream(
-            samplerate=SAMPLE_RATE, channels=1, dtype="float32",
-            blocksize=BLOCK_SIZE, callback=callback,
-        ):
-            while self.recording:
-                time.sleep(0.02)
+        try:
+            dev_info = sd.query_devices(kind="input")
+            native_rate = int(dev_info["default_samplerate"])
+            self._record_rate = native_rate
+            with sd.InputStream(
+                samplerate=native_rate, channels=1, dtype="float32",
+                blocksize=BLOCK_SIZE, callback=callback,
+            ):
+                while self.recording:
+                    time.sleep(0.02)
+        except Exception as exc:
+            def _reset():
+                lg = self._ui_lang()
+                self.recording       = False
+                self._toggle_active  = False
+                self.btn_record.title = t("menu_record", lg)
+                self._stop_spinner()
+                if self._overlay:
+                    self._overlay.hide()
+                self.title = self.name
+                self.lbl_status.title = f"⚠️ {exc}"
+            self._main_q.put(_reset)
 
     def _waveform(self):
         peak = max(self._levels) or 1e-6
@@ -584,8 +602,22 @@ class WisperBar(rumps.App):
             self.lbl_status.title = self._ready_status()
             return
 
-        silence    = np.zeros(SAMPLE_RATE * 3, dtype=np.float32)
-        audio      = np.concatenate([np.concatenate(self.frames).flatten(), silence])
+        audio_raw  = np.concatenate(self.frames).flatten()
+        rec_rate   = getattr(self, "_record_rate", SAMPLE_RATE)
+        if rec_rate != SAMPLE_RATE:
+            g          = gcd(rec_rate, SAMPLE_RATE)
+            audio_raw  = resample_poly(audio_raw, SAMPLE_RATE // g, rec_rate // g)
+        silence    = np.zeros(SAMPLE_RATE, dtype=np.float32)
+
+        # Si el audio es casi silencioso el mic no capturó nada → abortar
+        if float(np.sqrt(np.mean(audio_raw ** 2))) < 0.002:
+            self._stop_spinner()
+            if self._overlay:
+                self._main_q.put(self._overlay.hide)
+            self.lbl_status.title = "🎙 Sin audio — verificá el micrófono"
+            return
+
+        audio      = np.concatenate([audio_raw, silence])
         lang       = None if self.lang_code == "auto" else self.lang_code
         user_terms = self._cfg.get("user_terms", [])
         prompt     = build_initial_prompt(self.lang_code, user_terms) or None
@@ -596,9 +628,19 @@ class WisperBar(rumps.App):
             audio, path_or_hf_repo=model_repo,
             language=lang, task="transcribe",
             initial_prompt=prompt,
+            condition_on_previous_text=False,
         )
         detected = result.get("language", "")
         raw_text = auto_punctuate_questions(process_punctuation(result["text"].strip()))
+
+        # Filtrar alucinaciones conocidas de Whisper
+        _HALLUCINATIONS = {
+            "thank you", "thanks for watching", "thank you for watching",
+            "thanks for watching!", "thank you.", "thanks.",
+            "subtitles by the amara.org community",
+        }
+        if raw_text.lower().strip(".!? ") in _HALLUCINATIONS:
+            raw_text = ""
 
         if not raw_text:
             self._stop_spinner()
