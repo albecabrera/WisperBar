@@ -541,28 +541,43 @@ class WisperBar(rumps.App):
             self._levels.append(scaled)
             self.title = self._waveform()
 
-        try:
-            dev_info = sd.query_devices(kind="input")
-            native_rate = int(dev_info["default_samplerate"])
-            self._record_rate = native_rate
-            with sd.InputStream(
-                samplerate=native_rate, channels=1, dtype="float32",
-                blocksize=BLOCK_SIZE, callback=callback,
-            ):
-                while self.recording:
-                    time.sleep(0.02)
-        except Exception as exc:
+        def _queue_reset(err_msg: str):
             def _reset():
                 lg = self._ui_lang()
-                self.recording       = False
-                self._toggle_active  = False
+                self.recording        = False
+                self._toggle_active   = False
                 self.btn_record.title = t("menu_record", lg)
                 self._stop_spinner()
                 if self._overlay:
                     self._overlay.hide()
-                self.title = self.name
-                self.lbl_status.title = f"⚠️ {exc}"
+                self.title            = self.name
+                self.lbl_status.title = f"⚠️ {err_msg}"
             self._main_q.put(_reset)
+
+        try:
+            dev_info = sd.query_devices(kind="input")
+            native_rate = int(dev_info["default_samplerate"])
+            self._record_rate = native_rate
+            # Retry once — PortAudio sometimes fails on first attempt after
+            # another app held the mic, or when the audio unit is settling.
+            try:
+                stream_ctx = sd.InputStream(
+                    samplerate=native_rate, channels=1, dtype="float32",
+                    blocksize=BLOCK_SIZE, callback=callback,
+                )
+            except Exception:
+                time.sleep(0.4)
+                stream_ctx = sd.InputStream(
+                    samplerate=native_rate, channels=1, dtype="float32",
+                    blocksize=BLOCK_SIZE, callback=callback,
+                )
+            with stream_ctx:
+                while self.recording:
+                    time.sleep(0.02)
+        except Exception as exc:
+            # Python 3.13 deletes the 'exc' variable when the except block
+            # exits, so closures cannot reference it. Capture as plain string.
+            _queue_reset(str(exc))
 
     def _waveform(self):
         peak = max(self._levels) or 1e-6
