@@ -47,8 +47,8 @@ Todo esto pasa en menos de un segundo, y **jamás sale de tu computadora**. No h
 │          │                                                       │   │
 │          ▼                                                       ▼   │
 │  ┌───────────────┐                                  ┌─────────────┐ │
-│  │  Reconocedor  │  (Swift) SFSpeechRecognizer       │ Visualizador│ │
-│  │  de voz       │  (Python) MLX Whisper large-v3    │  de ondas   │ │
+│  │  Reconocedor  │  (Swift) SFSpeechRecognizer            │ Visualizador│ │
+│  │  de voz       │  (Python) MLX Whisper large-v3-turbo   │  de ondas   │ │
 │  └───────┬───────┘                                  └─────────────┘ │
 │          │  texto transcripto                                        │
 │          ▼                                                           │
@@ -166,6 +166,10 @@ El modelo Whisper recibe un vocabulario de términos técnicos como guía de con
 | `i18n.py` | Internacionalización de la UI en ES / EN / DE |
 | `autostart.py` | Registra y gestiona el LaunchAgent de macOS |
 
+#### Compatibilidad Python 3.13
+
+Python 3.13 eliminó el acceso a variables de bloque `except ... as exc` desde closures internos. WisperBar captura el mensaje de error como string antes de que Python borre la variable, garantizando que el estado de la app se resetee correctamente ante cualquier falla de audio. Además, el motor de grabación reintenta abrir el stream de micrófono con un breve delay cuando PortAudio devuelve el error `-10851` (`kAudioUnitErr_InvalidPropertyValue`), que ocurre cuando otra app acaba de liberar el micrófono.
+
 ### ¿Qué es MLX Whisper en palabras simples?
 
 Whisper es un modelo de inteligencia artificial creado por OpenAI que escucha audio y lo convierte en texto. Normalmente requiere una computadora muy potente o conexión a internet. Apple creó MLX, un framework que hace que ese mismo modelo corra directamente en el chip M1/M2/M3/M4 de tu Mac, usando la parte del chip dedicada a inteligencia artificial (Neural Engine), sin necesidad de internet ni de hardware especial.
@@ -272,7 +276,7 @@ El módulo `autostart.py` genera y carga un plist en `~/Library/LaunchAgents/com
 | Propiedad | Valor | Efecto |
 |-----------|-------|--------|
 | `RunAtLoad` | `true` | Arranca al hacer login |
-| `KeepAlive.Crashed` | `true` | Se reinicia automáticamente si crashea |
+| `KeepAlive.SuccessfulExit` | `false` | Se reinicia ante cualquier salida no exitosa (crash, excepción Python, kill) |
 | `ProcessType` | `Interactive` | Acceso a micrófono y pantalla |
 | Logs | `/tmp/wisperbar.log` / `/tmp/wisperbar.err` | stdout y stderr persistidos |
 
