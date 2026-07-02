@@ -13,7 +13,7 @@ Aplicación nativa para la barra de menú de macOS que convierte tu voz en texto
 
 ## ¿Para qué sirve?
 
-Mantenés presionada la tecla **Opción derecha (⌥)**, hablás, la soltás — y el texto aparece donde tengas el cursor. En cualquier app: Notion, Slack, VS Code, un formulario web, lo que sea.
+Mantenés presionada la tecla **Opción izquierda (⌥)**, hablás, la soltás — y el texto aparece donde tengas el cursor. En cualquier app: Notion, Slack, VS Code, un formulario web, lo que sea.
 
 ---
 
@@ -128,7 +128,6 @@ El modelo Whisper recibe un vocabulario de términos técnicos como guía de con
 ## Tecnologías
 
 ### Stack principal
-
 | Tecnología | Qué hace en este proyecto |
 |------------|--------------------------|
 | **Swift 5.9** | Lenguaje nativo de Apple. La versión principal de la app está escrita aquí |
@@ -148,7 +147,7 @@ El modelo Whisper recibe un vocabulario de términos técnicos como guía de con
 | **sounddevice** | Captura audio del micrófono vía PortAudio |
 | **NumPy** | Procesa las muestras de audio (arrays float32, cálculo de RMS) |
 | **rumps** | Crea la app de barra de menú en Python (wraps NSStatusItem) |
-| **pynput** | Escucha teclas globales (la Opción derecha) aunque otra app esté en foco |
+| **pynput** | Escucha teclas globales (la Opción izquierda) aunque otra app esté en foco |
 | **pyperclip** | Copia texto al portapapeles (wraps NSPasteboard) |
 | **PyObjC** | Puente Python ↔ Objective-C; necesario para crear el overlay NSPanel sin Xcode |
 | **macOS Keychain** | Almacena API keys de LLMs de forma segura vía `security` CLI |
@@ -208,8 +207,8 @@ Este repositorio contiene dos implementaciones independientes:
 
 | Acción | Tecla / Control |
 |--------|-----------------|
-| Iniciar dictado | Mantener **Opción derecha (⌥)** |
-| Detener y pegar | Soltar **Opción derecha (⌥)** |
+| Iniciar dictado | Mantener **Opción izquierda (⌥)** |
+| Detener y pegar | Soltar **Opción izquierda (⌥)** |
 | Menú de opciones | Click en el ícono de la barra de menú |
 | Configuración | Primer ítem del menú desplegable |
 
@@ -311,7 +310,7 @@ En el primer arranque macOS pide:
 |---------|----------|
 | **Micrófono** | Capturar el audio mientras hablás |
 | **Reconocimiento de voz** | Transcribir con `SFSpeechRecognizer` (solo versión Swift) |
-| **Accesibilidad** | Monitor global de teclado (Opción derecha) y Cmd+V automático |
+| **Accesibilidad** | Monitor global de teclado (Opción izquierda) y Cmd+V automático |
 
 Concedelos en **Configuración del Sistema → Privacidad y seguridad**.
 
@@ -325,7 +324,7 @@ WisperBar/
 │   ├── WisperBarApp.swift          — punto de entrada SwiftUI
 │   └── AppDelegate.swift           — barra de menú, overlay, hotkey, menú contextual
 ├── Managers/
-│   ├── HotKeyManager.swift         — monitor global NSEvent para Opción derecha
+│   ├── HotKeyManager.swift         — monitor global NSEvent para Opción izquierda
 │   └── WaveformOverlayManager.swift — gestiona el panel flotante de ondas
 ├── Models/
 │   └── SpeechRecognizer.swift      — SFSpeechRecognizer (es-ES), auto-paste, guard idempotente

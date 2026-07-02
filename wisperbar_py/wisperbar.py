@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 WisperBar – lokale Spracheingabe als macOS Menüleisten-App
-PTT-Shortcut: Right Option (⌥) halten → aufnehmen, loslassen → transkribieren
+PTT-Shortcut: Left Option (⌥) halten → aufnehmen, loslassen → transkribieren
 """
 
 import fcntl
@@ -783,11 +783,11 @@ class WisperBar(rumps.App):
         self._spinner_active = False
         self.title = "🎤"
 
-    # ── Right Option PTT / Toggle ─────────────────────────────────────────────
+    # ── Left Option PTT / Toggle ──────────────────────────────────────────────
 
     def _key_press(self, key):
         mode = self._cfg.get("hotkey_mode", "hold")
-        if key == kb.Key.alt_r:
+        if key == kb.Key.alt_l:
             if mode == "hold":
                 if not self._fn_held:
                     self._fn_held = True
@@ -805,7 +805,7 @@ class WisperBar(rumps.App):
 
     def _key_release(self, key):
         mode = self._cfg.get("hotkey_mode", "hold")
-        if key == kb.Key.alt_r and mode == "hold":
+        if key == kb.Key.alt_l and mode == "hold":
             self._fn_held = False
             if self.recording:
                 self._main_q.put(self._stop)
