@@ -351,6 +351,8 @@ class WisperBar(rumps.App):
         self._spinner_active = False
         self._spinner_ticks  = 0
         self._config_panel  = None
+        self._session_gen   = 0
+        self._hide_timer    = None
 
         self._build_menu()
         threading.Thread(target=self._load_model, daemon=True).start()
@@ -419,17 +421,21 @@ class WisperBar(rumps.App):
 
     @rumps.timer(0.016)
     def _overlay_tick(self, _):
-        try:
-            fn = self._main_q.get_nowait()
+        # Drenar la cola completa: un item por tick reordena start/stop
+        # respecto del estado leído en otros threads
+        while True:
+            try:
+                fn = self._main_q.get_nowait()
+            except queue.Empty:
+                break
             try:
                 fn()
             except Exception as exc:
                 print(f"[WisperBar] error: {exc}", flush=True)
-        except queue.Empty:
-            pass
 
         if self.recording and self._overlay:
             self._overlay.update(self._levels)
+            self.title = self._waveform()
 
         if self._overlay and not self.recording:
             self._overlay.tick_processing()
@@ -458,7 +464,7 @@ class WisperBar(rumps.App):
         except Exception as exc:
             print(f"[WisperBar] warmup error: {exc}", flush=True)
         self.model = True
-        self.lbl_status.title = self._ready_status()
+        self._main_q.put(lambda: setattr(self.lbl_status, "title", self._ready_status()))
 
     def _get_llm_base_url(self, provider: str) -> str:
         if provider == "ollama":
@@ -518,6 +524,12 @@ class WisperBar(rumps.App):
 
     def _start(self):
         lg                    = self._ui_lang()
+        # Invalidar el hide diferido de la sesión anterior: si no, el timer
+        # de 1.6s del dictado previo oculta el overlay de ESTA grabación
+        self._session_gen    += 1
+        if self._hide_timer is not None:
+            self._hide_timer.cancel()
+            self._hide_timer = None
         self.recording        = True
         self.frames           = []
         self.transcript       = ""
@@ -534,12 +546,13 @@ class WisperBar(rumps.App):
 
     def _record_loop(self):
         def callback(data, *_):
+            # Thread de PortAudio: solo datos, nada de AppKit (self.title
+            # off-main-thread causa glitches intermitentes en macOS 26)
             self.frames.append(data.copy())
             rms = float(np.sqrt(np.mean(data ** 2)))
             # Escala agresiva para que tonos normales llenen las barras
             scaled = min(rms * 40.0, 1.0)
             self._levels.append(scaled)
-            self.title = self._waveform()
 
         def _queue_reset(err_msg: str):
             def _reset():
@@ -603,18 +616,32 @@ class WisperBar(rumps.App):
             self._stop_spinner()
             if self._overlay:
                 self._overlay.set_mode("done" if success else "error")
-                # Ocultar overlay después del flash
-                threading.Timer(1.6, lambda: self._main_q.put(self._overlay.hide)).start()
+                # Ocultar overlay después del flash — solo si no arrancó
+                # otra grabación mientras tanto (guardia por generación)
+                gen = self._session_gen
+                def _guarded_hide():
+                    self._main_q.put(
+                        lambda: self._overlay.hide()
+                        if self._session_gen == gen and not self.recording else None
+                    )
+                self._hide_timer = threading.Timer(1.6, _guarded_hide)
+                self._hide_timer.start()
             preview  = (text[:45] + "…") if len(text) > 45 else text
             lang_tag = f" [{detected}]" if detected and self.lang_code == "auto" else ""
             self.lbl_status.title = f'{wf_icon}{lang_tag}  "{preview}"'
             self._refresh_actions()
 
+        def _abort(status: str):
+            # Corre en thread de transcripción: toda la UI via main queue
+            def _ui():
+                self._stop_spinner()
+                if self._overlay:
+                    self._overlay.hide()
+                self.lbl_status.title = status
+            self._main_q.put(_ui)
+
         if not self.frames:
-            self._stop_spinner()
-            if self._overlay:
-                self._main_q.put(self._overlay.hide)
-            self.lbl_status.title = self._ready_status()
+            _abort(self._ready_status())
             return
 
         audio_raw  = np.concatenate(self.frames).flatten()
@@ -626,10 +653,7 @@ class WisperBar(rumps.App):
 
         # Si el audio es casi silencioso el mic no capturó nada → abortar
         if float(np.sqrt(np.mean(audio_raw ** 2))) < 0.002:
-            self._stop_spinner()
-            if self._overlay:
-                self._main_q.put(self._overlay.hide)
-            self.lbl_status.title = "🎙 Sin audio — verificá el micrófono"
+            _abort("🎙 Sin audio — verificá el micrófono")
             return
 
         audio      = np.concatenate([audio_raw, silence])
@@ -658,10 +682,7 @@ class WisperBar(rumps.App):
             raw_text = ""
 
         if not raw_text:
-            self._stop_spinner()
-            if self._overlay:
-                self._main_q.put(self._overlay.hide)
-            self.lbl_status.title = self._ready_status()
+            _abort(self._ready_status())
             return
 
         # Fase 2: Ollama (si workflow lo requiere)
@@ -785,30 +806,44 @@ class WisperBar(rumps.App):
 
     # ── Left Option PTT / Toggle ──────────────────────────────────────────────
 
+    # Los chequeos de estado (recording/model) corren DENTRO de los closures,
+    # en el main thread. Leer self.recording desde el thread del listener
+    # pierde el stop cuando la pulsación es más corta que un tick (16ms):
+    # el release veía recording=False porque _start aún no había corrido.
+
+    def _hold_start(self):
+        if self.model and not self.recording:
+            self._start()
+
+    def _hold_stop(self):
+        if self.recording:
+            self._stop()
+
+    def _toggle_flip(self):
+        if self.recording:
+            self._stop()
+        elif self.model:
+            self._toggle_active = True
+            self._start()
+
     def _key_press(self, key):
         mode = self._cfg.get("hotkey_mode", "hold")
         if key == kb.Key.alt_l:
             if mode == "hold":
                 if not self._fn_held:
                     self._fn_held = True
-                    if self.model and not self.recording:
-                        self._main_q.put(self._start)
+                    self._main_q.put(self._hold_start)
             else:  # toggle
-                if not self.recording:
-                    if self.model:
-                        self._toggle_active = True
-                        self._main_q.put(self._start)
-                else:
-                    self._main_q.put(self._stop)
-        elif key == kb.Key.esc and mode == "toggle" and self.recording:
-            self._main_q.put(self._stop)
+                self._main_q.put(self._toggle_flip)
+        elif key == kb.Key.esc and mode == "toggle":
+            self._main_q.put(self._hold_stop)
 
     def _key_release(self, key):
         mode = self._cfg.get("hotkey_mode", "hold")
         if key == kb.Key.alt_l and mode == "hold":
             self._fn_held = False
-            if self.recording:
-                self._main_q.put(self._stop)
+            # Encolar siempre: FIFO garantiza que corre después del start
+            self._main_q.put(self._hold_stop)
 
     # ── UI-Hilfe ──────────────────────────────────────────────────────────────
 
