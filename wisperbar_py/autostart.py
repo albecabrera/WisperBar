@@ -28,10 +28,9 @@ _TEMPLATE = """\
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
-    <dict>
-        <key>SuccessfulExit</key>
-        <false/>
-    </dict>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
     <key>ProcessType</key>
     <string>Interactive</string>
     <key>StandardOutPath</key>
@@ -55,7 +54,7 @@ def is_registered() -> bool:
     return (
         sys.executable in content
         and str(_SCRIPT) in content
-        and "<key>SuccessfulExit</key>" in content  # plist con KeepAlive nuevo
+        and "<key>ThrottleInterval</key>" in content  # plist con KeepAlive incondicional
     )
 
 
