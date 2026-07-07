@@ -828,7 +828,7 @@ class WisperBar(rumps.App):
 
     def _key_press(self, key):
         mode = self._cfg.get("hotkey_mode", "hold")
-        if key == kb.Key.alt_l:
+        if key == kb.Key.alt_r:
             if mode == "hold":
                 if not self._fn_held:
                     self._fn_held = True
@@ -840,7 +840,7 @@ class WisperBar(rumps.App):
 
     def _key_release(self, key):
         mode = self._cfg.get("hotkey_mode", "hold")
-        if key == kb.Key.alt_l and mode == "hold":
+        if key == kb.Key.alt_r and mode == "hold":
             self._fn_held = False
             # Encolar siempre: FIFO garantiza que corre después del start
             self._main_q.put(self._hold_stop)

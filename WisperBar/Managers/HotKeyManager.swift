@@ -1,21 +1,21 @@
 // HotKeyManager.swift
-// Erkennt die linke Wahltaste (Left Option, keyCode 58) via NSEvent.flagsChanged.
+// Erkennt die rechte Wahltaste (Right Option, keyCode 61) via NSEvent.flagsChanged.
 // Push-to-Talk: gedrückt = aufnehmen, losgelassen = stoppen.
 // Kein Carbon nötig – kein separater API-Key für reine Modifier-Tasten.
 import AppKit
 
 final class HotKeyManager {
 
-    /// Hardware-keyCode der linken Wahltaste (kVK_Option).
-    private static let leftOptionKeyCode: UInt16 = 58
+    /// Hardware-keyCode der rechten Wahltaste (kVK_RightOption).
+    private static let rightOptionKeyCode: UInt16 = 61
 
     // MARK: – Eigenschaften
 
     private var globalMonitor: Any?
     private var localMonitor: Any?
 
-    /// Letzter bekannter Zustand der linken Wahltaste (Edge-Detection).
-    private var leftOptionDown = false
+    /// Letzter bekannter Zustand der rechten Wahltaste (Edge-Detection).
+    private var rightOptionDown = false
 
     // Statisch, damit Callback aus dem Monitor-Block erreichbar ist.
     // Bool: true = gerade gedrückt, false = gerade losgelassen.
@@ -23,7 +23,7 @@ final class HotKeyManager {
 
     // MARK: – Öffentliche API
 
-    /// Monitor für die linke Wahltaste registrieren (Push-to-Talk).
+    /// Monitor für die rechte Wahltaste registrieren (Push-to-Talk).
     func register(callback: @escaping (Bool) -> Void) {
         HotKeyManager.onChange = callback
         installMonitors()
@@ -48,17 +48,17 @@ final class HotKeyManager {
         }
     }
 
-    /// Erkennt Drücken/Loslassen der linken Wahltaste über ihren keyCode.
+    /// Erkennt Drücken/Loslassen der rechten Wahltaste über ihren keyCode.
     private func handleFlagsChanged(_ event: NSEvent) {
-        // Nur Ereignisse der linken Wahltaste betrachten – alle anderen Modifier ignorieren.
-        guard event.keyCode == HotKeyManager.leftOptionKeyCode else { return }
+        // Nur Ereignisse der rechten Wahltaste betrachten – alle anderen Modifier ignorieren.
+        guard event.keyCode == HotKeyManager.rightOptionKeyCode else { return }
 
         // Gedrückt, wenn das Option-Flag jetzt gesetzt ist.
         let isDown = event.modifierFlags.contains(.option)
 
         // Nur bei echtem Zustandswechsel feuern (Edge-Detection).
-        guard isDown != leftOptionDown else { return }
-        leftOptionDown = isDown
+        guard isDown != rightOptionDown else { return }
+        rightOptionDown = isDown
         HotKeyManager.onChange?(isDown)
     }
 
