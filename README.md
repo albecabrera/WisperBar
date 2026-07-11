@@ -48,7 +48,7 @@ Todo esto pasa en menos de un segundo, y **jamás sale de tu computadora**. No h
 │          ▼                                                       ▼   │
 │  ┌───────────────┐                                  ┌─────────────┐ │
 │  │  Reconocedor  │  (Swift) SFSpeechRecognizer            │ Visualizador│ │
-│  │  de voz       │  (Python) MLX Whisper large-v3-turbo   │  de ondas   │ │
+│  │  de voz       │  (Python) faster-whisper base (default)│  de ondas   │ │
 │  └───────┬───────┘                                  └─────────────┘ │
 │          │  texto transcripto                                        │
 │          ▼                                                           │
@@ -142,7 +142,8 @@ El modelo Whisper recibe un vocabulario de términos técnicos como guía de con
 | Tecnología | Qué hace en este proyecto |
 |------------|--------------------------|
 | **Python 3.10+** | Lenguaje de scripting; orquesta el flujo completo |
-| **MLX Whisper** | Whisper large-v3-turbo de OpenAI corriendo en Apple Silicon con el framework MLX de Apple — reconocimiento de voz muy preciso, multiidioma, más rápido que large-v3 |
+| **faster-whisper** | Motor por defecto (CTranslate2). El modelo `base` en int8 transcribe en ~0.2s sobre Apple Silicon — dictado casi instantáneo, multiidioma |
+| **MLX Whisper** | Motor alternativo. Modelos Whisper de OpenAI (tiny → large-v3) corriendo en Apple Silicon con el framework MLX; más precisos en audio difícil, algo más lentos |
 | **MLX** | Framework de Apple para Machine Learning en chips M1/M2/M3/M4. Usa la GPU/Neural Engine del chip sin necesidad de CUDA ni GPU externa |
 | **sounddevice** | Captura audio del micrófono vía PortAudio |
 | **NumPy** | Procesa las muestras de audio (arrays float32, cálculo de RMS) |
@@ -169,11 +170,16 @@ El modelo Whisper recibe un vocabulario de términos técnicos como guía de con
 
 Python 3.13 eliminó el acceso a variables de bloque `except ... as exc` desde closures internos. WisperBar captura el mensaje de error como string antes de que Python borre la variable, garantizando que el estado de la app se resetee correctamente ante cualquier falla de audio. Además, el motor de grabación reintenta abrir el stream de micrófono con un breve delay cuando PortAudio devuelve el error `-10851` (`kAudioUnitErr_InvalidPropertyValue`), que ocurre cuando otra app acaba de liberar el micrófono.
 
-### ¿Qué es MLX Whisper en palabras simples?
+### ¿Qué es Whisper en palabras simples?
 
-Whisper es un modelo de inteligencia artificial creado por OpenAI que escucha audio y lo convierte en texto. Normalmente requiere una computadora muy potente o conexión a internet. Apple creó MLX, un framework que hace que ese mismo modelo corra directamente en el chip M1/M2/M3/M4 de tu Mac, usando la parte del chip dedicada a inteligencia artificial (Neural Engine), sin necesidad de internet ni de hardware especial.
+Whisper es un modelo de inteligencia artificial creado por OpenAI que escucha audio y lo convierte en texto. Normalmente requiere una computadora muy potente o conexión a internet. WisperBar lo corre entero en tu Mac, sin internet ni hardware especial.
 
-WisperBar usa **large-v3-turbo**, una versión destilada que es ~8x más rápida que large-v3 con precisión casi idéntica. Además, al iniciar, la app ejecuta un **warmup** silencioso — transcribe un segundo de silencio — para que el primer dictado real no tenga el delay de carga del modelo.
+WisperBar soporta **dos motores**, intercambiables desde el panel de configuración:
+
+- **faster-whisper `base`** (por defecto) — motor CTranslate2 optimizado. Transcribe en ~0.2s sobre Apple Silicon: el texto aparece casi instantáneo al soltar la tecla. Ideal para dictado ágil del día a día.
+- **MLX Whisper** (`tiny` → `large-v3`) — corre sobre el Neural Engine del chip vía el framework MLX de Apple. Más preciso en audio ruidoso o términos raros, a cambio de algo más de latencia.
+
+En ambos casos, al iniciar la app ejecuta un **warmup** silencioso — transcribe un segundo de silencio — para que el modelo quede cargado y el primer dictado real no tenga delay.
 
 ---
 
@@ -181,12 +187,12 @@ WisperBar usa **large-v3-turbo**, una versión destilada que es ~8x más rápida
 
 Este repositorio contiene dos implementaciones independientes:
 
-| | Swift nativa | Python + MLX Whisper |
+| | Swift nativa | Python + Whisper |
 |-|-------------|----------------------|
 | **Ubicación** | `WisperBar/` | `wisperbar_py/` |
-| **Motor de voz** | SFSpeechRecognizer (Apple) | Whisper large-v3-turbo (OpenAI vía MLX) |
+| **Motor de voz** | SFSpeechRecognizer (Apple) | faster-whisper `base` (default) o MLX Whisper |
 | **Idiomas** | Español (`es-ES`) | Auto-detect + ES / EN / DE |
-| **Primer arranque** | Instantáneo | Descarga el modelo (~800 MB, solo la primera vez) |
+| **Primer arranque** | Instantáneo | Descarga el modelo (~75 MB base, solo la primera vez) |
 | **Precisión** | Alta para español | Muy alta, multiidioma |
 | **NLP / puntuación** | No | Sí — comandos hablados + detección de preguntas |
 | **Workflows LLM** | No | Sí — Ollama / Anthropic / OpenAI / genérico |
@@ -260,7 +266,7 @@ El script hace:
 3. Instala todas las dependencias del `requirements.txt`
 4. Lanza WisperBar desde el entorno aislado
 
-La primera vez descarga el modelo Whisper large-v3-turbo (~800 MB). Las siguientes veces arranca directamente.
+La primera vez descarga el modelo por defecto faster-whisper `base` (~75 MB). Las siguientes veces arranca directamente.
 
 ---
 
