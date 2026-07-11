@@ -51,6 +51,10 @@ from sentence_parser import auto_punctuate_questions
 
 SAMPLE_RATE = 16_000
 MODEL_REPO  = "mlx-community/whisper-large-v3-turbo"
+# Motor faster-whisper (CTranslate2): base int8 es casi instantáneo en Apple
+# Silicon. Se activa cuando whisper_model apunta a un repo faster-whisper.
+_FW_MODEL      = None   # WhisperModel cacheado (carga única en warmup)
+_FW_MODEL_REPO = None   # repo con el que se cargó, para recargar si cambia
 LOCK_PATH   = "/tmp/wisperbar.lock"
 APP_VERSION = os.environ.get("WISPERBAR_VERSION", "dev")
 APP_BUILD   = os.environ.get("WISPERBAR_BUILD", "0")
@@ -94,6 +98,44 @@ CONFIG_DEFAULTS = {
 }
 
 _lock_fd = None
+
+
+# ── ASR-Engine ────────────────────────────────────────────────────────────────
+
+def _is_faster_whisper(repo: str) -> bool:
+    r = repo.lower()
+    return "faster-whisper" in r or r.startswith("systran/")
+
+
+def _get_fw_model(repo: str):
+    """Carga (una vez) el WhisperModel de faster-whisper. int8/CPU = más rápido
+    en Apple Silicon. Se recarga solo si el repo configurado cambió."""
+    global _FW_MODEL, _FW_MODEL_REPO
+    if _FW_MODEL is None or _FW_MODEL_REPO != repo:
+        from faster_whisper import WhisperModel
+        _FW_MODEL      = WhisperModel(repo, device="cpu", compute_type="int8")
+        _FW_MODEL_REPO = repo
+    return _FW_MODEL
+
+
+def run_asr(audio, model_repo: str, lang, prompt) -> tuple[str, str]:
+    """Transcribe audio → (texto, idioma_detectado). Selecciona motor por repo:
+    faster-whisper (CTranslate2, casi instantáneo) o mlx_whisper. El contrato de
+    retorno es idéntico para ambos, así el resto del pipeline no cambia."""
+    if _is_faster_whisper(model_repo):
+        model          = _get_fw_model(model_repo)
+        segments, info = model.transcribe(
+            audio, language=lang, initial_prompt=prompt,
+            beam_size=1, condition_on_previous_text=False,
+        )
+        text = "".join(seg.text for seg in segments)
+        return text, (info.language or "")
+    result = mlx_whisper.transcribe(
+        audio, path_or_hf_repo=model_repo,
+        language=lang, task="transcribe",
+        initial_prompt=prompt, condition_on_previous_text=False,
+    )
+    return result["text"], result.get("language", "")
 
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -460,7 +502,7 @@ class WisperBar(rumps.App):
         model_repo = self._cfg.get("whisper_model", MODEL_REPO)
         try:
             warm = np.zeros(SAMPLE_RATE, dtype=np.float32)
-            mlx_whisper.transcribe(warm, path_or_hf_repo=model_repo)
+            run_asr(warm, model_repo, None, None)
         except Exception as exc:
             print(f"[WisperBar] warmup error: {exc}", flush=True)
         self.model = True
@@ -593,9 +635,12 @@ class WisperBar(rumps.App):
             _queue_reset(str(exc))
 
     def _waveform(self):
-        peak = max(self._levels) or 1e-6
+        # Snapshot: el callback de PortAudio hace append en otro thread; iterar
+        # el deque en vivo lanza "deque mutated during iteration"
+        src  = list(self._levels)
+        peak = max(src) or 1e-6
         return "".join(
-            BARS[min(int(v / peak * 8 + 0.5), 8)] for v in self._levels
+            BARS[min(int(v / peak * 8 + 0.5), 8)] for v in src
         )
 
     def _stop(self):
@@ -662,15 +707,9 @@ class WisperBar(rumps.App):
         prompt     = build_initial_prompt(self.lang_code, user_terms) or None
 
         # Fase 1: Whisper
-        model_repo = self._cfg.get("whisper_model", MODEL_REPO)
-        result     = mlx_whisper.transcribe(
-            audio, path_or_hf_repo=model_repo,
-            language=lang, task="transcribe",
-            initial_prompt=prompt,
-            condition_on_previous_text=False,
-        )
-        detected = result.get("language", "")
-        raw_text = auto_punctuate_questions(process_punctuation(result["text"].strip()))
+        model_repo     = self._cfg.get("whisper_model", MODEL_REPO)
+        text, detected = run_asr(audio, model_repo, lang, prompt)
+        raw_text = auto_punctuate_questions(process_punctuation(text.strip()))
 
         # Filtrar alucinaciones conocidas de Whisper
         _HALLUCINATIONS = {

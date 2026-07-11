@@ -33,6 +33,7 @@ CTRL_X    = LBL_W + 12  # x where controls start
 CTRL_W    = PANEL_W - CTRL_X - 20  # width of right-side controls
 
 WHISPER_MODELS = [
+    ("Turbo ⚡ (base, instantáneo)", "Systran/faster-whisper-base"),
     ("Tiny   (~40 MB)",     "mlx-community/whisper-tiny-mlx"),
     ("Base   (~74 MB)",     "mlx-community/whisper-base-mlx"),
     ("Small  (~244 MB)",    "mlx-community/whisper-small-mlx"),
