@@ -34,7 +34,9 @@ from AppKit import (
     NSWindowCollectionBehaviorFullScreenAuxiliary,
     NSFloatingWindowLevel, NSStatusWindowLevel,
     NSScreenSaverWindowLevel, NSEvent,
+    NSFont, NSFontAttributeName, NSForegroundColorAttributeName,
 )
+from Foundation import NSString
 
 from llm_service import LLMService, LLMError, keychain_load, PROVIDER_LABELS
 from vocab import build_initial_prompt
@@ -175,6 +177,17 @@ def _acquire_lock():
 
 _OVERLAY_MODES = ("waveform", "processing", "done", "error")
 
+_LANG_FLAGS = {"es": "🇪🇸", "en": "🇺🇸", "de": "🇩🇪"}
+
+
+def lang_badge(code: str) -> str:
+    """Badge de idioma para el overlay: bandera + código. En auto (idioma aún
+    no detectado) muestra el globo; idiomas detectados sin bandera propia
+    muestran globo + código (ej: '🌐 FR')."""
+    if not code or code == "auto":
+        return "🌐"
+    return f"{_LANG_FLAGS.get(code, '🌐')} {code.upper()}"
+
 
 class WaveformView(NSView):
 
@@ -187,7 +200,24 @@ class WaveformView(NSView):
             self._proc_t   = 0.0
             self._flash_t  = 0.0
             self._mode     = "waveform"
+            self._badge_attrs = {
+                NSFontAttributeName: NSFont.boldSystemFontOfSize_(13.0),
+                NSForegroundColorAttributeName:
+                    NSColor.colorWithRed_green_blue_alpha_(1.0, 1.0, 1.0, 0.92),
+            }
+            self._set_badge("auto")
         return self
+
+    @objc.python_method
+    def _set_badge(self, code: str):
+        # Cachear NSString + tamaño: drawRect corre a 60fps, no recalcular ahí
+        self._badge_str  = NSString.stringWithString_(lang_badge(code))
+        self._badge_size = self._badge_str.sizeWithAttributes_(self._badge_attrs)
+
+    @objc.python_method
+    def set_lang(self, code: str):
+        self._set_badge(code)
+        self.setNeedsDisplay_(True)
 
     @objc.python_method
     def set_mode(self, mode: str):
@@ -217,6 +247,13 @@ class WaveformView(NSView):
             self._flash_t -= 0.016
         self.setNeedsDisplay_(True)
 
+    @objc.python_method
+    def _draw_badge(self, h):
+        # Badge de idioma a la izquierda del pill, centrado verticalmente
+        self._badge_str.drawAtPoint_withAttributes_(
+            (18.0, (h - self._badge_size.height) / 2.0), self._badge_attrs
+        )
+
     def drawRect_(self, dirty):
         w = self.bounds().size.width
         h = self.bounds().size.height
@@ -235,6 +272,8 @@ class WaveformView(NSView):
             alpha = min(self._flash_t / 1.5, 1.0)
             NSColor.colorWithRed_green_blue_alpha_(0.0, 0.72, 0.32, 0.92 * alpha).setFill()
             pill.fill()
+            # Flash verde muestra el idioma detectado (útil en modo auto)
+            self._draw_badge(h)
             return
 
         if mode == "error":
@@ -250,6 +289,8 @@ class WaveformView(NSView):
         NSColor.colorWithRed_green_blue_alpha_(1.0, 1.0, 1.0, 0.38).setStroke()
         pill.setLineWidth_(1.5)
         pill.stroke()
+
+        self._draw_badge(h)
 
         if mode == "processing":
             # 3 puntos pulsantes con desfase de 120° (2.09 rad)
@@ -271,16 +312,17 @@ class WaveformView(NSView):
                 ).fill()
             return
 
-        # Modo waveform (barras)
-        pad_x  = 36.0
+        # Modo waveform (barras) — pad izquierdo mayor: deja lugar al badge
+        pad_l  = 72.0
+        pad_r  = 36.0
         bar_w  = 4.0
-        area_w = w - pad_x * 2
+        area_w = w - pad_l - pad_r
         gap    = (area_w - BAR_COUNT * bar_w) / max(BAR_COUNT - 1, 1)
 
         for i, lvl in enumerate(self._current):
             idle   = 0.14 + 0.08 * np.sin(self._idle_t * 3.8 + i * 0.45)
             height = max(idle * h * 0.9, lvl * h * 0.82)
-            x      = pad_x + i * (bar_w + gap)
+            x      = pad_l + i * (bar_w + gap)
             y      = (h - height) / 2.0
             t      = i / BAR_COUNT
             rc     = 0.10 + lvl * 0.20
@@ -360,6 +402,9 @@ class WaveformOverlay:
 
     def set_mode(self, mode: str):
         self._view.set_mode(mode)
+
+    def set_lang(self, code: str):
+        self._view.set_lang(code)
 
     def tick_processing(self):
         self._view.tick_processing()
@@ -583,6 +628,7 @@ class WisperBar(rumps.App):
         if self._overlay is None:
             self._overlay = WaveformOverlay()
         self._overlay.set_mode("waveform")
+        self._overlay.set_lang(self.lang_code)
         self._overlay.show()
         threading.Thread(target=self._record_loop, daemon=True).start()
 
@@ -660,6 +706,10 @@ class WisperBar(rumps.App):
         def _done(text: str, wf_icon: str, detected: str, success: bool = True):
             self._stop_spinner()
             if self._overlay:
+                # En auto el idioma se conoce recién ahora: el flash verde
+                # muestra la bandera del idioma detectado
+                if detected:
+                    self._overlay.set_lang(detected)
                 self._overlay.set_mode("done" if success else "error")
                 # Ocultar overlay después del flash — solo si no arrancó
                 # otra grabación mientras tanto (guardia por generación)

@@ -220,6 +220,10 @@ Este repositorio contiene dos implementaciones independientes:
 
 Al soltar la tecla, el texto transcripto se procesa (NLP + workflow LLM si está configurado), se copia al portapapeles y se pega automáticamente en el campo activo.
 
+### Overlay con indicador de idioma
+
+Durante el dictado, el overlay de ondas muestra un **badge de idioma** a la izquierda: la bandera y el código del idioma configurado (🇪🇸 ES, 🇺🇸 EN, 🇩🇪 DE). En modo auto-detect muestra 🌐 mientras grabás, y al terminar el flash verde de confirmación revela la bandera del idioma que Whisper detectó.
+
 ### Panel de configuración
 
 Accesible desde el menú. Permite configurar:
