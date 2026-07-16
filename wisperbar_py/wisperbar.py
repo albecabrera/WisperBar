@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 WisperBar – lokale Spracheingabe als macOS Menüleisten-App
-PTT-Shortcut: Left Option (⌥) halten → aufnehmen, loslassen → transkribieren
+PTT-Shortcut: Right Option (⌥) halten → aufnehmen, loslassen → transkribieren
 """
 
 import fcntl
@@ -227,7 +227,11 @@ class WaveformView(NSView):
 
     @objc.python_method
     def tick(self, levels_deque):
-        src   = list(levels_deque) if levels_deque else [0.0]
+        try:
+            src = list(levels_deque) if levels_deque else [0.0]
+        except RuntimeError:
+            # El callback de PortAudio muta el deque en otro thread: saltear frame
+            return
         peak  = max(src) or 1e-6
         norm  = [v / peak * 0.95 for v in src]
         ratio = len(norm) / BAR_COUNT
@@ -409,6 +413,9 @@ class WaveformOverlay:
     def tick_processing(self):
         self._view.tick_processing()
 
+    def visible(self) -> bool:
+        return bool(self._win.isVisible())
+
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
@@ -524,7 +531,7 @@ class WisperBar(rumps.App):
             self._overlay.update(self._levels)
             self.title = self._waveform()
 
-        if self._overlay and not self.recording:
+        if self._overlay and not self.recording and self._overlay.visible():
             self._overlay.tick_processing()
 
         # Spinner en icono — cada 5 ticks ≈ 80ms
@@ -602,7 +609,8 @@ class WisperBar(rumps.App):
 
     def toggle(self, _=None):
         if self.model is None:
-            rumps.alert("Bitte warten", "Das Sprachmodell wird noch geladen.")
+            lg = self._ui_lang()
+            rumps.alert(t("alert_wait_title", lg), t("alert_wait_msg", lg))
             return
         if self.recording:
             self._stop()
@@ -683,7 +691,10 @@ class WisperBar(rumps.App):
     def _waveform(self):
         # Snapshot: el callback de PortAudio hace append en otro thread; iterar
         # el deque en vivo lanza "deque mutated during iteration"
-        src  = list(self._levels)
+        try:
+            src = list(self._levels)
+        except RuntimeError:
+            return self.title
         peak = max(src) or 1e-6
         return "".join(
             BARS[min(int(v / peak * 8 + 0.5), 8)] for v in src
@@ -703,6 +714,32 @@ class WisperBar(rumps.App):
     # ── Transkription ─────────────────────────────────────────────────────────
 
     def _transcribe(self):
+        # Cualquier excepción no capturada mataba el thread en silencio:
+        # spinner infinito y overlay clavado en "processing". Acá se recupera
+        # con flash rojo + mensaje en el menú.
+        try:
+            self._transcribe_impl()
+        except Exception as exc:
+            print(f"[WisperBar] transcribe error: {exc}", flush=True)
+            err = str(exc)
+
+            def _ui():
+                self._stop_spinner()
+                if self._overlay:
+                    self._overlay.set_mode("error")
+                    gen = self._session_gen
+
+                    def _guarded_hide():
+                        self._main_q.put(
+                            lambda: self._overlay.hide()
+                            if self._session_gen == gen and not self.recording else None
+                        )
+                    self._hide_timer = threading.Timer(1.6, _guarded_hide)
+                    self._hide_timer.start()
+                self.lbl_status.title = f"⚠️ {err[:80]}"
+            self._main_q.put(_ui)
+
+    def _transcribe_impl(self):
         def _done(text: str, wf_icon: str, detected: str, success: bool = True):
             self._stop_spinner()
             if self._overlay:
