@@ -26,12 +26,15 @@ class Sentence:
 # ── Palabras interrogativas ───────────────────────────────────────────────────
 
 _INTERROGATIVES: dict[str, list[str]] = {
+    # Solo formas acentuadas: Whisper escribe la tilde en interrogativas.
+    # Las variantes sin tilde (que/como/cuando/donde) son conjunciones o
+    # relativos ("como siempre digo") → puro falso positivo.
     "es": [
-        "por que", "por que no", "que tal", "de donde", "para que",
-        "en que", "a que",
-        "que", "como", "cuando", "donde",
-        "quien", "quienes", "cual", "cuales",
-        "cuanto", "cuantos", "cuanta", "cuantas",
+        "por qué", "qué tal", "que tal", "de dónde", "para qué",
+        "en qué", "a qué",
+        "qué", "cómo", "cuándo", "dónde",
+        "quién", "quiénes", "cuál", "cuáles",
+        "cuánto", "cuántos", "cuánta", "cuántas",
     ],
     "en": [
         "how many", "how much", "how long", "how often", "how come",
@@ -55,6 +58,25 @@ _START_Q_BY_LANG: dict[str, re.Pattern] = {
     )
     for lang, words in _INTERROGATIVES.items()
 }
+
+
+# Interrogativa espanola al inicio o tras coma/punto y coma — marca dónde
+# insertar '¿' dentro de la frase (RAE: la apertura va donde empieza la
+# pregunta, ej. "Hola, ¿qué tal?").
+_ES_Q_INLINE = re.compile(
+    r"(?:^|[,;:]\s+)(" + "|".join(
+        re.escape(w) for w in sorted(_INTERROGATIVES["es"], key=len, reverse=True)
+    ) + r")(?=\s|\?|$)",
+    re.IGNORECASE | re.UNICODE,
+)
+
+
+def _insert_opening_mark(t: str) -> str:
+    m = _ES_Q_INLINE.search(t)
+    if not m:
+        return t
+    i = m.start(1)
+    return t[:i] + "¿" + t[i:]
 
 
 # ── Verbos que inician preguntas por inversion V-S ───────────────────────────
@@ -149,11 +171,16 @@ def _classify(text: str) -> tuple[bool, bool]:
     if not s:
         return False, False
 
-    # 1. Signo explicito
-    if "?" in s or s.startswith("¿"):
-        return True, False
-
     clean = s.lstrip("¿").strip()
+
+    # 1. Signo explicito. Si Whisper puso '?' pero falta '¿' y la frase
+    #    empieza con interrogativa espanola, hay que agregar la apertura.
+    #    Solo interrogativas (qué/cómo/…), no verbos: 'es'/'has' colisionan
+    #    con alemán e inglés y meterían '¿' en frases de otros idiomas.
+    if "?" in s or s.startswith("¿"):
+        if not s.startswith("¿") and _START_Q_BY_LANG["es"].match(clean):
+            return True, True
+        return True, False
 
     # 2. Palabra interrogativa al inicio (con idioma para saber si aplica '¿')
     for lang, pat in _START_Q_BY_LANG.items():
@@ -216,11 +243,14 @@ def auto_punctuate_questions(text: str) -> str:
                 t = t[:-1] + "?"
             elif not t.endswith(("?", "!")):
                 t = t + "?"
-            # Agregar apertura espanol si aplica
-            if s.needs_opening_mark and not t.startswith("¿"):
+            # Apertura espanola: primero intentar insercion inline
+            # (cubre "Hola, ¿qué tal?"); si no, prepend por inversion V-S
+            if "¿" not in t and t.endswith("?"):
+                t = _insert_opening_mark(t)
+            if s.needs_opening_mark and "¿" not in t:
                 t = "¿" + t
         # Primera letra siempre mayuscula (preguntas y enunciados)
         t = _capitalize_first(t)
         out.append(t)
 
-    return "  ".join(out) if "\n\n" not in text else "\n\n".join(out)
+    return " ".join(out) if "\n\n" not in text else "\n\n".join(out)
